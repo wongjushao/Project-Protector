@@ -2,14 +2,14 @@ from fastapi import APIRouter, HTTPException, Request
 import os
 
 from app.services.image_processor import run_ocr_jpeg
-# from app.services.pdf_processor import run_pdf_processing
+from app.services.pdf_processor import run_pdf_processing
 
 router = APIRouter()
 UPLOAD_DIR = "uploads"
 
 @router.post("/process/{task_id}")
 async def process_task(task_id: str, request: Request):
-    base_url = str(request.base_url)  # e.g., http://127.0.0.1:8000/
+    base_url = str(request.base_url)
     task_path = os.path.join(UPLOAD_DIR, task_id)
     
     if not os.path.exists(task_path):
@@ -24,6 +24,9 @@ async def process_task(task_id: str, request: Request):
         try:
             if ext in [".jpg", ".jpeg", ".png", ".webp"]:
                 result = run_ocr_jpeg(file_path)
+            elif ext in [".pdf"]:
+                result = run_pdf_processing(file_path)
+            elif ext in [".txt", ".csv"]:
 
                 # 替换为完整 URL 链接（跨平台兼容）
                 if "masked_image" in result:
@@ -33,8 +36,6 @@ async def process_task(task_id: str, request: Request):
                 if "key_file" in result:
                     result["key_file"] = base_url + result["key_file"].replace("\\", "/")
 
-            # elif ext == ".pdf":
-            #     result = run_pdf_processing(file_path)
             else:
                 result = {"error": f"Unsupported file type: {ext}"}
 

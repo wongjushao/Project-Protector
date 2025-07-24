@@ -1,6 +1,7 @@
 # OCR/pii_main.py
 import re
 from transformers import TFAutoModelForTokenClassification, AutoTokenizer, pipeline
+from app.resources.dictionaries import NAMES, ORG_NAMES, RACES, STATUS, LOCATIONS
 
 # === 模型加载 ===
 model_name = "jplu/tf-xlm-r-ner-40-lang"
@@ -42,7 +43,8 @@ def extract_phone(text):
     return re.findall(r'(\+60\d{1,2}[-\s]?\d{6,8}|\b01\d[-\s]?\d{7,8}\b)', text)
 
 def extract_money(text):
-    return re.findall(r"\bRM\s?\d+(?:,\d{3})*(?:\.\d{2})?\b", text)
+    return re.findall(
+        r'\b(?:RM\s?)?(\d{1,3}(?:,\d{3})*|\d+)(?:\.\d{2})?\b', text)
 
 def extract_gender(text):
     return re.findall(r'\b(LELAKI|PEREMPUAN|MALE|FEMALE)\b', text, re.I)
@@ -56,6 +58,38 @@ MALAYSIA_LOCATIONS = {
     "PENANG", "GEORGETOWN", "ALOR SETAR", "KELANTAN", "TERENGGANU",
     "MELAKA", "KUCHING", "KOTA KINABALU", "LABUAN", "SABAH", "SARAWAK"
 }
+
+def extract_from_dictionaries(text):
+    print("[DEBUG] 原始文本：", text)
+    tokens = re.findall(r'\b[\w\-]+\b', text.lower())
+    print("[DEBUG] 分词结果：", tokens)
+
+    # 构造词典 token（拆词）
+    NAMES_TOKENIZED = {w for name in NAMES for w in name.lower().split()}
+    ORG_TOKENIZED = {w for name in ORG_NAMES for w in name.lower().split()}
+    RACE_TOKENIZED = {r.lower() for r in RACES}
+    STATUS_TOKENIZED = {s.lower() for s in STATUS}
+
+    # 地址关键词拆分
+    LOCATION_TOKENIZED = set()
+    for loc in LOCATIONS:
+        LOCATION_TOKENIZED.update(re.findall(r'\b[\w\-]+\b', loc.lower()))
+
+    results = []
+    for token in tokens:
+        if token in NAMES_TOKENIZED:
+            results.append(("Name", token))
+        elif token in ORG_TOKENIZED:
+            results.append(("ORG", token))
+        elif token in RACE_TOKENIZED:
+            results.append(("Race", token))
+        elif token in STATUS_TOKENIZED:
+            results.append(("Status", token))
+        elif token in LOCATION_TOKENIZED:
+            results.append(("Location", token))
+
+    print("[DEBUG] 字典匹配结果：", results)
+    return results
 
 # ✅ 主函数：提取所有 PII（带过滤）
 def extract_all_pii(text):
