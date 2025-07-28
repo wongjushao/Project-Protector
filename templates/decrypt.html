@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Protector - Decrypt Files</title>
+    <link rel="stylesheet" href="/static/css/banking-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="nav-links">
+            <a href="/" class="nav-link">
+                <i class="fas fa-shield-alt"></i> Process Documents
+            </a>
+            <a href="/decrypt" class="nav-link">
+                <i class="fas fa-unlock"></i> Decrypt Files
+            </a>
+        </div>
+        <div class="header-content">
+            <h1>
+                <i class="fas fa-unlock"></i>
+                File Decryption
+            </h1>
+            <p class="subtitle">Restore Original Content from Protected Files</p>
+            <div class="security-badge">
+                <i class="fas fa-key"></i>
+                Secure Decryption Process
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Decrypt Section -->
+        <div class="card" id="decrypt-section">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-file-upload"></i>
+                    Upload Files for Decryption
+                </h2>
+                <p class="card-subtitle">
+                    Upload the masked file, JSON metadata, and decryption key to restore the original content.
+                </p>
+            </div>
+
+            <!-- File Upload Areas -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <!-- Masked File Upload -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-file-alt"></i> Masked File
+                    </label>
+                    <div class="file-upload-area" id="masked-file-area" style="padding: 1.5rem;">
+                        <div class="upload-icon" style="font-size: 2rem; margin-bottom: 0.5rem;">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="upload-text" style="font-size: 1rem;">Drop masked file here</div>
+                        <div class="upload-subtext">PDF, DOCX, Image files</div>
+                        <input type="file" id="masked-file-input" accept=".pdf,.docx,.jpg,.jpeg,.png,.txt,.csv" style="display: none;">
+                    </div>
+                    <div id="masked-file-info" class="file-info-display" style="display: none;"></div>
+                </div>
+
+                <!-- JSON File Upload -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-code"></i> JSON Metadata
+                    </label>
+                    <div class="file-upload-area" id="json-file-area" style="padding: 1.5rem;">
+                        <div class="upload-icon" style="font-size: 2rem; margin-bottom: 0.5rem;">
+                            <i class="fas fa-code"></i>
+                        </div>
+                        <div class="upload-text" style="font-size: 1rem;">Drop JSON file here</div>
+                        <div class="upload-subtext">Metadata file (.json)</div>
+                        <input type="file" id="json-file-input" accept=".json" style="display: none;">
+                    </div>
+                    <div id="json-file-info" class="file-info-display" style="display: none;"></div>
+                </div>
+
+                <!-- Key File Upload -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-key"></i> Decryption Key
+                    </label>
+                    <div class="file-upload-area" id="key-file-area" style="padding: 1.5rem;">
+                        <div class="upload-icon" style="font-size: 2rem; margin-bottom: 0.5rem;">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="upload-text" style="font-size: 1rem;">Drop key file here</div>
+                        <div class="upload-subtext">Key file (.key)</div>
+                        <input type="file" id="key-file-input" accept=".key" style="display: none;">
+                    </div>
+                    <div id="key-file-info" class="file-info-display" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- Upload Status -->
+            <div id="upload-status" style="margin-bottom: 1.5rem;"></div>
+
+            <!-- Action Button -->
+            <div class="text-center">
+                <button class="btn btn-primary" id="decrypt-btn" disabled>
+                    <i class="fas fa-unlock"></i>
+                    Decrypt File
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Section -->
+        <div class="card" id="decrypt-status-section" style="display: none;">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-cogs"></i>
+                    Decryption Status
+                </h2>
+                <p class="card-subtitle">
+                    Processing your decryption request...
+                </p>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="decrypt-status-messages"></div>
+
+            <!-- Progress Bar -->
+            <div class="progress-container" id="decrypt-progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="decrypt-progress-fill"></div>
+                </div>
+                <p class="text-center" style="margin-top: 0.5rem; color: var(--medium-gray);" id="decrypt-progress-text">
+                    Decrypting file...
+                </p>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="text-center">
+                <button class="btn btn-primary" id="new-decrypt-btn" style="display: none;">
+                    <i class="fas fa-plus"></i>
+                    Decrypt Another File
+                </button>
+            </div>
+        </div>
+
+        <!-- Instructions Section -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-question-circle"></i>
+                    Decryption Instructions
+                </h2>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2.5rem; color: var(--secondary-blue); margin-bottom: 1rem;">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <h3 style="color: var(--primary-blue); margin-bottom: 0.5rem;">1. Masked File</h3>
+                    <p style="color: var(--medium-gray);">Upload the processed file with masked PII data</p>
+                </div>
+                
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2.5rem; color: var(--warning-orange); margin-bottom: 1rem;">
+                        <i class="fas fa-code"></i>
+                    </div>
+                    <h3 style="color: var(--primary-blue); margin-bottom: 0.5rem;">2. JSON Metadata</h3>
+                    <p style="color: var(--medium-gray);">Upload the JSON file containing encryption metadata</p>
+                </div>
+                
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2.5rem; color: var(--accent-gold); margin-bottom: 1rem;">
+                        <i class="fas fa-key"></i>
+                    </div>
+                    <h3 style="color: var(--primary-blue); margin-bottom: 0.5rem;">3. Decryption Key</h3>
+                    <p style="color: var(--medium-gray);">Upload the key file to decrypt the masked content</p>
+                </div>
+            </div>
+
+            <div style="background: rgba(0, 102, 204, 0.1); padding: 1.5rem; border-radius: var(--border-radius-md); margin-top: 1.5rem; border-left: 4px solid var(--secondary-blue);">
+                <h4 style="color: var(--primary-blue); margin-bottom: 1rem;">
+                    <i class="fas fa-info-circle"></i> Important Notes
+                </h4>
+                <ul style="color: var(--medium-gray); line-height: 1.8;">
+                    <li>All three files are required for successful decryption</li>
+                    <li>Files must be from the same processing task</li>
+                    <li>The decrypted file will be automatically downloaded</li>
+                    <li>Original file structure and formatting will be preserved</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/decrypt.js"></script>
+</body>
+</html>

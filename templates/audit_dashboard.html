@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Dashboard - Project Protector</title>
+    <link rel="stylesheet" href="/static/css/banking-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .audit-dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-blue), var(--secondary-blue));
+            color: white;
+            padding: var(--spacing-xl);
+            border-radius: var(--border-radius-lg);
+            margin-bottom: var(--spacing-xl);
+            text-align: center;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .stat-card {
+            background: var(--white);
+            padding: var(--spacing-lg);
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-md);
+            border-left: 4px solid var(--accent-gold);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: var(--font-weight-bold);
+            color: var(--primary-blue);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .stat-label {
+            color: var(--medium-gray);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            float: right;
+            font-size: 2rem;
+            color: var(--accent-gold);
+            opacity: 0.7;
+        }
+        
+        .audit-section {
+            background: var(--white);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-md);
+            margin-bottom: var(--spacing-xl);
+            overflow: hidden;
+        }
+        
+        .section-header {
+            background: var(--light-gray);
+            padding: var(--spacing-lg);
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: var(--font-weight-medium);
+            color: var(--primary-blue);
+            margin: 0;
+        }
+        
+        .section-controls {
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: center;
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-input {
+            padding: var(--spacing-sm);
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius-sm);
+            font-size: 0.9rem;
+        }
+        
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .audit-table th,
+        .audit-table td {
+            padding: var(--spacing-md);
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .audit-table th {
+            background: var(--light-gray);
+            font-weight: var(--font-weight-medium);
+            color: var(--primary-blue);
+            position: sticky;
+            top: 0;
+        }
+        
+        .audit-table tr:hover {
+            background: rgba(0, 102, 204, 0.02);
+        }
+        
+        .status-badge {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-size: 0.8rem;
+            font-weight: var(--font-weight-medium);
+            text-transform: uppercase;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-lg);
+        }
+        
+        .pagination button {
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: 1px solid #dee2e6;
+            background: var(--white);
+            color: var(--primary-blue);
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background: var(--primary-blue);
+            color: white;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination .current-page {
+            background: var(--primary-blue);
+            color: white;
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        .btn-export {
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--accent-gold);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-export:hover {
+            background: #d4a017;
+            transform: translateY(-1px);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: var(--spacing-xl);
+            color: var(--medium-gray);
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius-sm);
+            margin: var(--spacing-md);
+        }
+        
+        .timestamp {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: var(--medium-gray);
+        }
+        
+        .json-data {
+            background: #f8f9fa;
+            padding: var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .refresh-indicator {
+            display: inline-block;
+            margin-left: var(--spacing-sm);
+            color: var(--accent-gold);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .tab-container {
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .tab-buttons {
+            display: flex;
+            gap: 0;
+        }
+        
+        .tab-button {
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--medium-gray);
+            cursor: pointer;
+            font-weight: var(--font-weight-medium);
+            transition: all 0.3s ease;
+        }
+        
+        .tab-button.active {
+            color: var(--primary-blue);
+            border-bottom-color: var(--primary-blue);
+        }
+        
+        .tab-button:hover {
+            color: var(--primary-blue);
+            background: rgba(0, 102, 204, 0.05);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="audit-dashboard">
+        <!-- Header -->
+        <div class="dashboard-header">
+            <h1><i class="fas fa-shield-alt"></i> Audit Dashboard</h1>
+            <p>Comprehensive tracking and monitoring of all Project Protector activities</p>
+            <div style="margin-top: var(--spacing-md);">
+                <span id="last-updated">Last updated: Loading...</span>
+                <button id="refresh-all" class="btn btn-secondary" style="margin-left: var(--spacing-md);">
+                    <i class="fas fa-sync-alt"></i> Refresh All
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistics Overview -->
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+                <i class="fas fa-users stat-icon"></i>
+                <div class="stat-number" id="total-sessions">-</div>
+                <div class="stat-label">Active Sessions</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-upload stat-icon"></i>
+                <div class="stat-number" id="total-uploads">-</div>
+                <div class="stat-label">File Uploads</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-cogs stat-icon"></i>
+                <div class="stat-number" id="total-processed">-</div>
+                <div class="stat-label">Files Processed</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-eye-slash stat-icon"></i>
+                <div class="stat-number" id="total-pii-masked">-</div>
+                <div class="stat-label">PII Items Masked</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-exclamation-triangle stat-icon"></i>
+                <div class="stat-number" id="total-errors">-</div>
+                <div class="stat-label">System Errors</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-clock stat-icon"></i>
+                <div class="stat-number" id="avg-processing-time">-</div>
+                <div class="stat-label">Avg Processing Time</div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="file-operations">
+                    <i class="fas fa-file"></i> File Operations
+                </button>
+                <button class="tab-button" data-tab="pii-processing">
+                    <i class="fas fa-eye-slash"></i> PII Processing
+                </button>
+                <button class="tab-button" data-tab="user-actions">
+                    <i class="fas fa-user"></i> User Actions
+                </button>
+                <button class="tab-button" data-tab="system-events">
+                    <i class="fas fa-server"></i> System Events
+                </button>
+                <button class="tab-button" data-tab="sessions">
+                    <i class="fas fa-users"></i> Sessions
+                </button>
+            </div>
+        </div>
+
+        <!-- File Operations Tab -->
+        <div id="file-operations" class="tab-content active">
+            <div class="audit-section">
+                <div class="section-header">
+                    <h2 class="section-title">File Operations</h2>
+                    <div class="section-controls">
+                        <div class="filter-group">
+                            <select id="file-op-type-filter" class="filter-input">
+                                <option value="">All Operations</option>
+                                <option value="upload">Upload</option>
+                                <option value="process">Process</option>
+                                <option value="download">Download</option>
+                            </select>
+                            <select id="file-status-filter" class="filter-input">
+                                <option value="">All Status</option>
+                                <option value="success">Success</option>
+                                <option value="error">Error</option>
+                                <option value="in_progress">In Progress</option>
+                            </select>
+                        </div>
+                        <div class="export-buttons">
+                            <button class="btn-export" onclick="exportData('file_operations', 'csv')">
+                                <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                            <button class="btn-export" onclick="exportData('file_operations', 'json')">
+                                <i class="fas fa-file-code"></i> JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="file-operations-content">
+                    <div class="loading">Loading file operations...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PII Processing Tab -->
+        <div id="pii-processing" class="tab-content">
+            <div class="audit-section">
+                <div class="section-header">
+                    <h2 class="section-title">PII Processing</h2>
+                    <div class="section-controls">
+                        <div class="export-buttons">
+                            <button class="btn-export" onclick="exportData('pii_processing', 'csv')">
+                                <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                            <button class="btn-export" onclick="exportData('pii_processing', 'json')">
+                                <i class="fas fa-file-code"></i> JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="pii-processing-content">
+                    <div class="loading">Loading PII processing logs...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Actions Tab -->
+        <div id="user-actions" class="tab-content">
+            <div class="audit-section">
+                <div class="section-header">
+                    <h2 class="section-title">User Actions</h2>
+                    <div class="section-controls">
+                        <div class="filter-group">
+                            <select id="action-type-filter" class="filter-input">
+                                <option value="">All Actions</option>
+                                <option value="page_visit">Page Visit</option>
+                                <option value="api_call">API Call</option>
+                                <option value="form_submit">Form Submit</option>
+                                <option value="button_click">Button Click</option>
+                            </select>
+                        </div>
+                        <div class="export-buttons">
+                            <button class="btn-export" onclick="exportData('user_actions', 'csv')">
+                                <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                            <button class="btn-export" onclick="exportData('user_actions', 'json')">
+                                <i class="fas fa-file-code"></i> JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="user-actions-content">
+                    <div class="loading">Loading user actions...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Events Tab -->
+        <div id="system-events" class="tab-content">
+            <div class="audit-section">
+                <div class="section-header">
+                    <h2 class="section-title">System Events</h2>
+                    <div class="section-controls">
+                        <div class="filter-group">
+                            <select id="event-type-filter" class="filter-input">
+                                <option value="">All Events</option>
+                                <option value="error">Error</option>
+                                <option value="warning">Warning</option>
+                                <option value="info">Info</option>
+                                <option value="security">Security</option>
+                            </select>
+                            <select id="severity-filter" class="filter-input">
+                                <option value="">All Severity</option>
+                                <option value="critical">Critical</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                                <option value="info">Info</option>
+                            </select>
+                        </div>
+                        <div class="export-buttons">
+                            <button class="btn-export" onclick="exportData('system_events', 'csv')">
+                                <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                            <button class="btn-export" onclick="exportData('system_events', 'json')">
+                                <i class="fas fa-file-code"></i> JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="system-events-content">
+                    <div class="loading">Loading system events...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sessions Tab -->
+        <div id="sessions" class="tab-content">
+            <div class="audit-section">
+                <div class="section-header">
+                    <h2 class="section-title">User Sessions</h2>
+                    <div class="section-controls">
+                        <div class="filter-group">
+                            <label>
+                                <input type="checkbox" id="active-sessions-only"> Active Only
+                            </label>
+                        </div>
+                        <div class="export-buttons">
+                            <button class="btn-export" onclick="exportData('sessions', 'csv')">
+                                <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                            <button class="btn-export" onclick="exportData('sessions', 'json')">
+                                <i class="fas fa-file-code"></i> JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="sessions-content">
+                    <div class="loading">Loading sessions...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/audit_dashboard.js"></script>
+</body>
+</html>

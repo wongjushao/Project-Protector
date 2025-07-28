@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Review - Project Protector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .file-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 5px solid #007bff;
+        }
+
+        .file-info h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .file-info p {
+            color: #6c757d;
+            margin: 5px 0;
+        }
+
+        .view-modes {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+
+        .mode-btn:not(.active) {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .mode-btn:hover:not(.active) {
+            background: #dee2e6;
+            transform: translateY(-2px);
+        }
+
+        .image-container {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+            min-height: 500px;
+        }
+
+        .image-panel {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            border: 2px dashed #dee2e6;
+            transition: all 0.3s ease;
+        }
+
+        .image-panel h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .image-panel img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            cursor: crosshair;
+            user-select: none;
+            -webkit-user-drag: none;
+            -khtml-user-drag: none;
+            -moz-user-drag: none;
+            -o-user-drag: none;
+            user-drag: none;
+            pointer-events: auto;
+        }
+
+        .edit-mode .image-panel {
+            flex: none;
+            width: 100%;
+        }
+
+        .edit-mode .image-panel:last-child {
+            display: none;
+        }
+
+        .selection-tools {
+            display: none;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 2px solid #007bff;
+        }
+
+        .edit-mode .selection-tools {
+            display: block;
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .tool-group label {
+            font-weight: 600;
+            color: #2c3e50;
+            min-width: 120px;
+        }
+
+        .tool-btn {
+            padding: 8px 20px;
+            border: 2px solid #007bff;
+            background: white;
+            color: #007bff;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .tool-btn.active {
+            background: #007bff;
+            color: white;
+        }
+
+        .tool-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+            color: white;
+            box-shadow: 0 5px 15px rgba(40,167,69,0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d, #545b62);
+            color: white;
+            box-shadow: 0 5px 15px rgba(108,117,125,0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .status-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+            display: none;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 5px 15px rgba(255,193,7,0.3);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 8px 25px rgba(255,193,7,0.6);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 5px 15px rgba(255,193,7,0.3);
+            }
+        }
+
+        .selection-overlay {
+            position: absolute;
+            border: 2px solid #ff0000;
+            background: rgba(255, 0, 0, 0.2);
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+            box-sizing: border-box;
+        }
+
+        .edit-mode .image-panel img {
+            cursor: crosshair !important;
+        }
+
+        .edit-mode .image-wrapper {
+            cursor: crosshair;
+        }
+
+        /* Prevent text selection during dragging */
+        .no-select {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .image-wrapper {
+            position: relative;
+            display: inline-block;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .selections-list {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            border: 1px solid #dee2e6;
+        }
+
+        .selection-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .selection-item:last-child {
+            border-bottom: none;
+        }
+
+        .delete-selection {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 5px 15px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .delete-selection:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Human Review</h1>
+            <p>Manual editing and review for JPEG/JPG images</p>
+        </div>
+
+        <div class="content">
+            <div class="file-info">
+                <h3>📁 File Information</h3>
+                <p><strong>Task ID:</strong> {{ task_id }}</p>
+                <p><strong>Filename:</strong> {{ filename }}</p>
+                <p><strong>File Type:</strong> JPEG/JPG Image</p>
+            </div>
+
+            <div class="status-message" id="statusMessage"></div>
+            <div class="loading" id="loadingIndicator">
+                <div class="spinner"></div>
+                <p>Processing your selections...</p>
+            </div>
+
+            <div class="view-modes">
+                <button class="mode-btn active" id="compareBtn">Compare View</button>
+                <button class="mode-btn" id="editBtn">Edit Mode</button>
+            </div>
+
+            <div class="selection-tools" id="selectionTools">
+                <div class="tool-group">
+                    <label>Selection Tool:</label>
+                    <button class="tool-btn active" data-tool="rectangle">Rectangle</button>
+                    <button class="tool-btn" data-tool="blur">Blur Area</button>
+                </div>
+                <div class="tool-group">
+                    <label>Instructions:</label>
+                    <span>Click and drag on the image to select areas for masking</span>
+                </div>
+                <div class="selections-list" id="selectionsList">
+                    <h4>Selected Areas:</h4>
+                    <div id="selectionsContainer">
+                        <p>No areas selected yet</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="image-container" id="imageContainer">
+                <div class="image-panel">
+                    <h3>📷 Original Image</h3>
+                    <div class="image-wrapper">
+                        <img src="{{ original_image_url }}" alt="Original Image" id="originalImage"
+                             draggable="false" ondragstart="return false;" oncontextmenu="return false;">
+                        <div class="selection-overlay" id="selectionOverlay"></div>
+                    </div>
+                </div>
+                
+                {% if masked_image_url %}
+                <div class="image-panel">
+                    <h3>🎭 Processed Image</h3>
+                    <img src="{{ masked_image_url }}" alt="Masked Image" id="maskedImage">
+                </div>
+                {% else %}
+                <div class="image-panel">
+                    <h3>🎭 Processed Image</h3>
+                    <p style="color: #6c757d; margin-top: 50px;">No processed version available yet</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="enterEditBtn">Enter Edit Mode</button>
+                <button class="btn btn-success" id="submitChangesBtn" style="display: none;">Submit Changes</button>
+                <button class="btn btn-secondary" id="cancelEditBtn" style="display: none;">Cancel Edit</button>
+                <a href="#" class="btn btn-warning" id="downloadBtn">
+                    <i class="fas fa-download"></i>
+                    Download Results
+                </a>
+                <a href="/" class="btn btn-secondary">Back to Main</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let isEditMode = false;
+        let currentTool = 'rectangle';
+        let isSelecting = false;
+        let startX, startY;
+        let selections = [];
+        let taskId = '{{ task_id }}';
+        let filename = '{{ filename }}';
+
+        // DOM elements
+        const compareBtn = document.getElementById('compareBtn');
+        const editBtn = document.getElementById('editBtn');
+        const enterEditBtn = document.getElementById('enterEditBtn');
+        const submitChangesBtn = document.getElementById('submitChangesBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const imageContainer = document.getElementById('imageContainer');
+        const originalImage = document.getElementById('originalImage');
+        const selectionOverlay = document.getElementById('selectionOverlay');
+        const statusMessage = document.getElementById('statusMessage');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const selectionsContainer = document.getElementById('selectionsContainer');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            updateSelectionsDisplay();
+        });
+
+        function setupEventListeners() {
+            // Mode buttons
+            compareBtn.addEventListener('click', () => switchToCompareMode());
+            editBtn.addEventListener('click', () => switchToEditMode());
+            enterEditBtn.addEventListener('click', () => switchToEditMode());
+            submitChangesBtn.addEventListener('click', () => submitChanges());
+            cancelEditBtn.addEventListener('click', () => switchToCompareMode());
+
+            // Download button
+            downloadBtn.addEventListener('click', (e) => {
+                console.log('Download button clicked');
+                e.preventDefault();
+                e.stopPropagation();
+                downloadResults();
+            });
+
+            // Tool buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentTool = this.dataset.tool;
+                });
+            });
+
+            // Disable image dragging and context menu
+            originalImage.addEventListener('dragstart', (e) => {
+                e.preventDefault();
+                return false;
+            });
+
+            originalImage.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                return false;
+            });
+
+            // Image selection events
+            originalImage.addEventListener('mousedown', startSelection);
+            document.addEventListener('mousemove', updateSelection);
+            document.addEventListener('mouseup', endSelection);
+            originalImage.addEventListener('mouseleave', endSelection);
+
+            // Prevent text selection during dragging
+            document.addEventListener('selectstart', (e) => {
+                if (isSelecting) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        }
+
+        function switchToCompareMode() {
+            isEditMode = false;
+            compareBtn.classList.add('active');
+            editBtn.classList.remove('active');
+            imageContainer.classList.remove('edit-mode');
+            document.body.classList.remove('no-select');
+
+            enterEditBtn.style.display = 'inline-block';
+            submitChangesBtn.style.display = 'none';
+            cancelEditBtn.style.display = 'none';
+
+            clearSelections();
+
+            // Reset any ongoing selection
+            if (isSelecting) {
+                isSelecting = false;
+                selectionOverlay.style.display = 'none';
+            }
+        }
+
+        function switchToEditMode() {
+            isEditMode = true;
+            editBtn.classList.add('active');
+            compareBtn.classList.remove('active');
+            imageContainer.classList.add('edit-mode');
+            document.body.classList.add('no-select');
+
+            enterEditBtn.style.display = 'none';
+            submitChangesBtn.style.display = 'inline-block';
+            cancelEditBtn.style.display = 'inline-block';
+
+            // Show instructions
+            showStatus('Click and drag on the image to select areas for masking', 'info');
+        }
+
+        function startSelection(e) {
+            if (!isEditMode) return;
+
+            // Prevent default behavior
+            e.preventDefault();
+            e.stopPropagation();
+
+            isSelecting = true;
+            const rect = originalImage.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+
+            // Ensure coordinates are within image bounds
+            startX = Math.max(0, Math.min(startX, rect.width));
+            startY = Math.max(0, Math.min(startY, rect.height));
+
+            selectionOverlay.style.left = startX + 'px';
+            selectionOverlay.style.top = startY + 'px';
+            selectionOverlay.style.width = '0px';
+            selectionOverlay.style.height = '0px';
+            selectionOverlay.style.display = 'block';
+
+            // Change cursor to indicate selection mode
+            originalImage.style.cursor = 'crosshair';
+        }
+
+        function updateSelection(e) {
+            if (!isEditMode || !isSelecting) return;
+
+            // Prevent default behavior
+            e.preventDefault();
+            e.stopPropagation();
+
+            const rect = originalImage.getBoundingClientRect();
+            let currentX = e.clientX - rect.left;
+            let currentY = e.clientY - rect.top;
+
+            // Constrain coordinates to image bounds
+            currentX = Math.max(0, Math.min(currentX, rect.width));
+            currentY = Math.max(0, Math.min(currentY, rect.height));
+
+            const width = Math.abs(currentX - startX);
+            const height = Math.abs(currentY - startY);
+            const left = Math.min(currentX, startX);
+            const top = Math.min(currentY, startY);
+
+            selectionOverlay.style.left = left + 'px';
+            selectionOverlay.style.top = top + 'px';
+            selectionOverlay.style.width = width + 'px';
+            selectionOverlay.style.height = height + 'px';
+        }
+
+        function endSelection(e) {
+            if (!isEditMode || !isSelecting) return;
+
+            // Prevent default behavior
+            e.preventDefault();
+            e.stopPropagation();
+
+            isSelecting = false;
+
+            const rect = originalImage.getBoundingClientRect();
+            let currentX = e.clientX - rect.left;
+            let currentY = e.clientY - rect.top;
+
+            // Constrain coordinates to image bounds
+            currentX = Math.max(0, Math.min(currentX, rect.width));
+            currentY = Math.max(0, Math.min(currentY, rect.height));
+
+            const width = Math.abs(currentX - startX);
+            const height = Math.abs(currentY - startY);
+            const left = Math.min(currentX, startX);
+            const top = Math.min(currentY, startY);
+
+            // Only add selection if it has meaningful size
+            if (width > 10 && height > 10) {
+                // Convert to image coordinates
+                const imageWidth = originalImage.naturalWidth;
+                const imageHeight = originalImage.naturalHeight;
+                const displayWidth = originalImage.clientWidth;
+                const displayHeight = originalImage.clientHeight;
+
+                const scaleX = imageWidth / displayWidth;
+                const scaleY = imageHeight / displayHeight;
+
+                const selection = {
+                    x: Math.round(left * scaleX),
+                    y: Math.round(top * scaleY),
+                    width: Math.round(width * scaleX),
+                    height: Math.round(height * scaleY),
+                    selection_type: currentTool
+                };
+
+                selections.push(selection);
+                updateSelectionsDisplay();
+                showStatus(`${currentTool} selection added successfully`, 'success');
+            } else if (width > 0 || height > 0) {
+                showStatus('Selection too small - please make a larger selection', 'info');
+            }
+
+            selectionOverlay.style.display = 'none';
+
+            // Reset cursor
+            originalImage.style.cursor = 'crosshair';
+        }
+
+        function clearSelections() {
+            selections = [];
+            updateSelectionsDisplay();
+        }
+
+        function removeSelection(index) {
+            selections.splice(index, 1);
+            updateSelectionsDisplay();
+            showStatus('Selection removed', 'info');
+        }
+
+        function updateSelectionsDisplay() {
+            if (selections.length === 0) {
+                selectionsContainer.innerHTML = '<p>No areas selected yet</p>';
+                return;
+            }
+            
+            let html = '';
+            selections.forEach((selection, index) => {
+                html += `
+                    <div class="selection-item">
+                        <span>${selection.selection_type} (${selection.x}, ${selection.y}) ${selection.width}×${selection.height}</span>
+                        <button class="delete-selection" onclick="removeSelection(${index})">Remove</button>
+                    </div>
+                `;
+            });
+            
+            selectionsContainer.innerHTML = html;
+        }
+
+        async function submitChanges() {
+            if (selections.length === 0) {
+                showStatus('Please select at least one area to mask', 'error');
+                return;
+            }
+
+            console.log('Submitting selections:', selections);
+            console.log('Task ID:', taskId);
+            console.log('Filename:', filename);
+
+            showLoading(true);
+            showStatus('Processing your manual selections...', 'info');
+
+            const requestData = {
+                task_id: taskId,
+                filename: filename,
+                selections: selections
+            };
+
+            console.log('Request data:', requestData);
+
+            try {
+                const response = await fetch('/api/human-review/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const result = await response.json();
+
+                console.log('Server response:', result);
+
+                if (response.ok && result.status === 'success') {
+                    const areasProcessed = result.areas_masked || 0;
+                    const totalSelections = result.total_selections || selections.length;
+
+                    if (areasProcessed > 0) {
+                        showStatus(`Successfully processed ${areasProcessed} out of ${totalSelections} selected areas! You can now download the results.`, 'success');
+
+                        // Update the masked image
+                        const maskedImage = document.getElementById('maskedImage');
+                        if (maskedImage && result.masked_image) {
+                            maskedImage.src = result.masked_image + '?t=' + Date.now(); // Cache bust
+                        }
+
+                        // Switch back to compare mode and highlight download button
+                        setTimeout(() => {
+                            switchToCompareMode();
+
+                            // Briefly highlight the download button
+                            downloadBtn.style.animation = 'pulse 2s ease-in-out 3';
+                            setTimeout(() => {
+                                downloadBtn.style.animation = '';
+                            }, 6000);
+                        }, 2000);
+                    } else {
+                        showStatus(`No areas were processed. Please check your selections and try again.`, 'error');
+                    }
+
+                } else {
+                    showStatus('Processing failed: ' + (result.message || 'Unknown error'), 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('Network error: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message status-${type}`;
+            statusMessage.style.display = 'block';
+            
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            loadingIndicator.style.display = show ? 'block' : 'none';
+        }
+
+        async function downloadResults() {
+            console.log('Download function called');
+            console.log('Task ID:', taskId);
+            console.log('Filename:', filename);
+
+            if (!taskId) {
+                console.error('No task ID available');
+                showStatus('No task ID available for download', 'error');
+                return;
+            }
+
+            if (!taskId.trim()) {
+                console.error('Task ID is empty or whitespace');
+                showStatus('Invalid task ID for download', 'error');
+                return;
+            }
+
+            showStatus('Preparing download...', 'info');
+
+            // Use the correct download API endpoint with /api prefix
+            const downloadUrl = `/api/download/${taskId}`;
+            console.log('Download URL:', downloadUrl);
+
+            try {
+                // Proceed directly with download - the browser will handle errors gracefully
+                console.log('Initiating download...');
+
+                // Create a temporary link to trigger download
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = `project_protector_results_${taskId}.zip`;
+                link.style.display = 'none';
+
+                console.log('Created download link:', link.href);
+
+                // Add error handling for the link
+                link.addEventListener('error', (e) => {
+                    console.error('Download link error:', e);
+                    showStatus('Download failed. Please try again or contact support.', 'error');
+                });
+
+                document.body.appendChild(link);
+                console.log('Added link to DOM');
+
+                link.click();
+                console.log('Clicked download link');
+
+                // Small delay before removing to ensure click is processed
+                setTimeout(() => {
+                    if (document.body.contains(link)) {
+                        document.body.removeChild(link);
+                        console.log('Removed link from DOM');
+                    }
+                }, 100);
+
+                showStatus('Download started! Check your downloads folder.', 'success');
+                console.log(`Download initiated successfully for task: ${taskId}`);
+
+                // Additional check: verify download after a short delay
+                setTimeout(() => {
+                    // This is a simple check - in a real scenario, you might want to
+                    // implement more sophisticated download verification
+                    console.log('Download should have started. If no download occurred, there may be an issue with the task files.');
+                }, 1000);
+
+            } catch (error) {
+                console.error('Download error:', error);
+                showStatus('Download failed: ' + error.message, 'error');
+            }
+        }
+
+        // Make removeSelection available globally
+        window.removeSelection = removeSelection;
+    </script>
+</body>
+</html>

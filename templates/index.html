@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Protector - Secure Document Processing</title>
+    <link rel="stylesheet" href="/static/css/banking-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="nav-links">
+            <a href="/" class="nav-link">
+                <i class="fas fa-shield-alt"></i> Process Documents
+            </a>
+            <a href="/decrypt" class="nav-link">
+                <i class="fas fa-unlock"></i> Decrypt Files
+            </a>
+        </div>
+        <div class="header-content">
+            <h1>
+                <i class="fas fa-shield-alt"></i>
+                Project Protector
+            </h1>
+            <p class="subtitle">Secure Document Processing & PII Protection</p>
+            <div class="security-badge">
+                <i class="fas fa-lock"></i>
+                Bank-Grade Security
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Upload Section -->
+        <div class="card" id="upload-section">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    Upload Documents
+                </h2>
+                <p class="card-subtitle">
+                    Select files to process for PII detection and protection. Supported formats: PDF, DOCX, XLSX, Images, Text files.
+                </p>
+            </div>
+
+            <!-- File Upload Area -->
+            <div class="file-upload-area" id="file-upload-area">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <div class="upload-text">
+                    Drag & drop files here or click to browse
+                </div>
+                <div class="upload-subtext">
+                    Maximum file size: 50MB per file | Supported: PDF, DOCX, XLSX, JPG, PNG, TXT, CSV
+                </div>
+                <input type="file" id="file-input" multiple accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.txt,.csv" style="display: none;">
+            </div>
+
+            <!-- Selected Files List -->
+            <div class="file-list" id="file-list" style="display: none;">
+                <h3 style="color: var(--primary-blue); margin-bottom: 1rem;">
+                    <i class="fas fa-list"></i> Selected Files
+                </h3>
+                <div id="selected-files"></div>
+            </div>
+
+            <!-- PII Selection Section -->
+            <div class="form-group" id="pii-selection-section" style="display: none;">
+                <label class="form-label">
+                    <i class="fas fa-shield-alt"></i> Select PII Types to Mask
+                </label>
+                <div style="background: var(--light-gray); padding: var(--spacing-lg); border-radius: var(--border-radius-md); border-left: 4px solid var(--secondary-blue);">
+                    <p style="color: var(--medium-gray); margin-bottom: var(--spacing-lg); font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i>
+                        Choose which types of personally identifiable information to mask.
+                        <strong>Sensitive data (IC numbers, credit cards, emails, etc.) will always be masked for security.</strong>
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--spacing-md);">
+                        <label class="pii-checkbox-label">
+                            <input type="checkbox" class="pii-checkbox" value="NAMES" checked>
+                            <span class="pii-checkbox-custom"></span>
+                            <div class="pii-checkbox-content">
+                                <strong>Personal Names</strong>
+                                <small>Names and personal identities</small>
+                            </div>
+                        </label>
+
+                        <label class="pii-checkbox-label">
+                            <input type="checkbox" class="pii-checkbox" value="RACES" checked>
+                            <span class="pii-checkbox-custom"></span>
+                            <div class="pii-checkbox-content">
+                                <strong>Ethnic Information</strong>
+                                <small>Racial and ethnic data</small>
+                            </div>
+                        </label>
+
+                        <label class="pii-checkbox-label">
+                            <input type="checkbox" class="pii-checkbox" value="ORG_NAMES" checked>
+                            <span class="pii-checkbox-custom"></span>
+                            <div class="pii-checkbox-content">
+                                <strong>Organization Names</strong>
+                                <small>Company and organization names</small>
+                            </div>
+                        </label>
+
+                        <label class="pii-checkbox-label">
+                            <input type="checkbox" class="pii-checkbox" value="STATUS" checked>
+                            <span class="pii-checkbox-custom"></span>
+                            <div class="pii-checkbox-content">
+                                <strong>Status Information</strong>
+                                <small>Marital and social status</small>
+                            </div>
+                        </label>
+
+                        <label class="pii-checkbox-label">
+                            <input type="checkbox" class="pii-checkbox" value="LOCATIONS" checked>
+                            <span class="pii-checkbox-custom"></span>
+                            <div class="pii-checkbox-content">
+                                <strong>Geographic Locations</strong>
+                                <small>Addresses and location data</small>
+                            </div>
+                        </label>
+
+                        <label class="pii-checkbox-label">
+                            <input type="checkbox" class="pii-checkbox" value="RELIGIONS" checked>
+                            <span class="pii-checkbox-custom"></span>
+                            <div class="pii-checkbox-content">
+                                <strong>Religious Information</strong>
+                                <small>Religious affiliations</small>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid #dee2e6;">
+                        <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
+                            <button type="button" class="btn-link" id="select-all-pii">
+                                <i class="fas fa-check-square"></i> Select All
+                            </button>
+                            <button type="button" class="btn-link" id="deselect-all-pii">
+                                <i class="fas fa-square"></i> Deselect All
+                            </button>
+                        </div>
+                        <p style="color: var(--medium-gray); font-size: 0.8rem; margin-top: var(--spacing-sm);">
+                            <i class="fas fa-lock"></i>
+                            <strong>Always masked:</strong> IC numbers, phone numbers, email addresses, credit cards, bank accounts, passports, and other sensitive identifiers.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="text-center mt-lg">
+                <button class="btn btn-primary" id="submit-btn" disabled>
+                    <i class="fas fa-paper-plane"></i>
+                    Submit Files
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Section -->
+        <div class="card" id="status-section" style="display: none;">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-tasks"></i>
+                    Processing Status
+                </h2>
+                <p class="card-subtitle">
+                    Track the progress of your document processing task.
+                </p>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="status-messages"></div>
+
+            <!-- Progress Bar -->
+            <div class="progress-container" id="progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p class="text-center" style="margin-top: 0.5rem; color: var(--medium-gray);" id="progress-text">
+                    Processing files...
+                </p>
+            </div>
+
+            <!-- Task Information -->
+            <div id="task-info" style="display: none;">
+                <div style="background: var(--light-gray); padding: 1rem; border-radius: var(--border-radius-md); margin-bottom: 1rem;">
+                    <h4 style="color: var(--primary-blue); margin-bottom: 0.5rem;">
+                        <i class="fas fa-info-circle"></i> Task Details
+                    </h4>
+                    <p><strong>Task ID:</strong> <span id="task-id-display"></span></p>
+                    <p><strong>Files Uploaded:</strong> <span id="files-count"></span></p>
+                    <p><strong>Status:</strong> <span id="task-status">Uploaded</span></p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="text-center">
+                <button class="btn btn-success" id="process-btn" style="display: none;">
+                    <i class="fas fa-cogs"></i>
+                    Process Files
+                </button>
+                <button class="btn btn-warning" id="download-btn" style="display: none;">
+                    <i class="fas fa-download"></i>
+                    Download Results
+                </button>
+                <button class="btn btn-info" id="human-review-btn" style="display: none;">
+                    <i class="fas fa-eye"></i>
+                    Human Review
+                </button>
+                <button class="btn btn-primary" id="new-task-btn" style="display: none;">
+                    <i class="fas fa-plus"></i>
+                    Start New Task
+                </button>
+            </div>
+        </div>
+
+        <!-- Instructions Section -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-info-circle"></i>
+                    How It Works
+                </h2>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2.5rem; color: var(--secondary-blue); margin-bottom: 1rem;">
+                        <i class="fas fa-upload"></i>
+                    </div>
+                    <h3 style="color: var(--primary-blue); margin-bottom: 0.5rem;">1. Upload</h3>
+                    <p style="color: var(--medium-gray);">Select and upload your documents for processing</p>
+                </div>
+                
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2.5rem; color: var(--success-green); margin-bottom: 1rem;">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3 style="color: var(--primary-blue); margin-bottom: 0.5rem;">2. Process</h3>
+                    <p style="color: var(--medium-gray);">AI analyzes and masks sensitive information</p>
+                </div>
+                
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2.5rem; color: var(--warning-orange); margin-bottom: 1rem;">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <h3 style="color: var(--primary-blue); margin-bottom: 0.5rem;">3. Download</h3>
+                    <p style="color: var(--medium-gray);">Get your protected files and decryption keys</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
