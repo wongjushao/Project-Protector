@@ -58,27 +58,36 @@ def images_to_pdf(image_folder, output_pdf_path):
     print(f"✅ 合成 PDF 完成: {output_pdf_path}")
     return output_pdf_path
 
-def process_image_with_mask(image_path, reader, key_path):
+def process_image_with_mask(image_path, reader, key_path, enabled_pii_categories=None):
     print(f"[THREAD] 处理：{image_path}")
     # 获取 JSON 路径：将 .key 扩展名替换为 .json
     base_path, _ = os.path.splitext(key_path)
     json_path = base_path + ".json"
-    return mask_sensitive_text(image_path=image_path, key_path=key_path, reader=reader, output_json_path=json_path)
+    return mask_sensitive_text(
+        image_path=image_path,
+        key_path=key_path,
+        reader=reader,
+        output_json_path=json_path,
+        enabled_pii_categories=enabled_pii_categories
+    )
 
-def process_pdf_images_multithread(image_dir, reader, key_path="aes_key.key", max_workers=4):
+def process_pdf_images_multithread(image_dir, reader, key_path="aes_key.key", max_workers=4, enabled_pii_categories=None):
     image_paths = [
         os.path.join(image_dir, f) for f in sorted(os.listdir(image_dir))
         if f.lower().endswith((".jpg", ".jpeg", ".png"))
     ]
-    
+
+    print(f"[INFO] 开始多线程处理 {len(image_paths)} 个图片页面")
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(process_image_with_mask, path, reader, key_path): path
+            executor.submit(process_image_with_mask, path, reader, key_path, enabled_pii_categories): path
             for path in image_paths
         }
         for future in as_completed(futures):
             path = futures[future]
             try:
                 future.result()
+                print(f"[SUCCESS] 页面处理完成: {os.path.basename(path)}")
             except Exception as e:
                 print(f"❌ 处理失败 {path}: {e}")

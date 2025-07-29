@@ -6,7 +6,7 @@ from cryptography.fernet import Fernet
 from openpyxl import load_workbook
 from app.services.pii_main import extract_all_pii
 
-def mask_xlsx_sensitive_text(xlsx_path: str, key_path: str = None):
+def mask_xlsx_sensitive_text(xlsx_path: str, key_path: str = None, enabled_pii_categories=None):
     if key_path is None:
         key_path = xlsx_path.replace(".xlsx", ".key")
 
@@ -26,14 +26,14 @@ def mask_xlsx_sensitive_text(xlsx_path: str, key_path: str = None):
         for row in ws.iter_rows():
             for cell in row:
                 if isinstance(cell.value, str):
-                    for ent in extract_all_pii(cell.value):
-                        encrypted = fernet.encrypt(ent["entity"].encode()).decode()
-                        masked = f"[ENC:{ent['label']}]"
-                        cell.value = cell.value.replace(ent["entity"], masked)
+                    for label, entity in extract_all_pii(cell.value, enabled_pii_categories):
+                        encrypted = fernet.encrypt(entity.encode()).decode()
+                        masked = f"[ENC:{label}]"
+                        cell.value = cell.value.replace(entity, masked)
                         masked_pii.append({
-                            "original": ent["entity"],
+                            "original": entity,
                             "encrypted": encrypted,
-                            "label": ent["label"],
+                            "label": label,
                             "masked": masked
                         })
 
@@ -46,11 +46,11 @@ def mask_xlsx_sensitive_text(xlsx_path: str, key_path: str = None):
 
     return masked_path, json_path, key_path
 
-def run_xlsx_processing(xlsx_path: str):
+def run_xlsx_processing(xlsx_path: str, enabled_pii_categories=None):
     try:
         key_path = xlsx_path.replace(".xlsx", ".key")
         masked_xlsx, json_path, key_file = mask_xlsx_sensitive_text(
-            xlsx_path, key_path
+            xlsx_path, key_path, enabled_pii_categories
         )
         return {
             "status": "success",

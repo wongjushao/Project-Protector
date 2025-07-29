@@ -92,7 +92,7 @@ def run_text_processing(file_path: str, enabled_pii_categories=None, key_str: st
         if ext == ".csv":
             return process_csv_optimized(file_path, fernet, key, enabled_pii_categories)
         else:
-            return process_text_optimized(file_path, fernet, key)
+            return process_text_optimized(file_path, fernet, key, enabled_pii_categories)
 
     except Exception as e:
         return {
@@ -173,18 +173,14 @@ def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categ
         "key_file": key_file_path
     }
 
-def process_text_optimized(file_path: str, fernet: Fernet, key):
-    """优化的文本处理函数"""
+def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categories=None):
+    """优化的文本处理函数，支持选择性PII遮罩"""
     content = read_text_file(file_path)
-    
+
     print("[INFO] 开始提取PII...")
-    # 提取所有PII（NER + 规则 + 字典）
-    pii_list = extract_all_pii(content)
-    dict_pii_list = extract_from_dictionaries(content)
-    all_pii_list = pii_list + dict_pii_list
-    
-    print(f"[INFO] NER找到 {len(pii_list)} 个PII项")
-    print(f"[INFO] 字典匹配找到 {len(dict_pii_list)} 个PII项")
+    # 使用增强的extract_all_pii（包含NER + 规则 + 字典 + ChatGPT）
+    all_pii_list = extract_all_pii(content, enabled_pii_categories)
+
     print(f"[INFO] 总共找到 {len(all_pii_list)} 个PII项")
     
     # 创建唯一PII映射避免重复处理 - 使用哈希来创建唯一标签

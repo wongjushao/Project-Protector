@@ -442,6 +442,7 @@ LOCATIONS = {
 	"0934 Frye Loaf Suite 373, Lake Diana, SC 17946",
 	"61809 Chapman Common Apt. 742, West Kristopher, NV 44849",
 	"USNV Myers, FPO AE 66560",
+	"303 Jalan Kuala Kangsar, Batu Gajah, Perak",
 	"88554 Eric Neck Suite 741, Lake Dustinshire, OH 02604",
 	"PSC 9073, Box 0600, APO AP 57815",
 	"303 Jalan Kuala Kangsar, Batu Gajah, Perak",

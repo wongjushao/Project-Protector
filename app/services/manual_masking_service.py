@@ -86,21 +86,23 @@ def process_manual_masking(image_path: str, selections, task_id: str) -> Dict[st
                     print(f"[WARN] Selection outside image bounds: {selection}")
                     continue
                 
-                # Extract the area to be masked
+                # Extract the area to be masked (original image region)
                 area_to_mask = image[y:y+height, x:x+width]
-                
-                # Create encrypted data for this area
-                area_data = {
-                    "selection_id": str(uuid.uuid4()),
-                    "coordinates": {"x": x, "y": y, "width": width, "height": height},
-                    "selection_type": selection_type,
-                    "manual_selection": True,
-                    "timestamp": str(uuid.uuid4())  # Using UUID as timestamp placeholder
-                }
-                
-                # Encrypt the area data
-                encrypted_data = cipher_suite.encrypt(json.dumps(area_data).encode())
-                
+
+                # Encode the original image region as base64 (matching OCR format)
+                success, roi_encoded = cv2.imencode('.png', area_to_mask)
+                if not success:
+                    print(f"[WARN] Failed to encode region, skipping: selection {i+1}")
+                    continue
+
+                roi_base64 = base64.b64encode(roi_encoded).decode('utf-8')
+
+                # Create text data to encrypt (simulating OCR text for consistency)
+                text_to_encrypt = f"Manual_Selection_{i+1}_Area_{x}_{y}_{width}_{height}"
+
+                # Encrypt the text (matching OCR format)
+                encrypted_text = cipher_suite.encrypt(text_to_encrypt.encode()).decode()
+
                 # Apply masking based on selection type
                 if selection_type == "rectangle":
                     # Simple black rectangle mask
@@ -113,14 +115,13 @@ def process_manual_masking(image_path: str, selections, task_id: str) -> Dict[st
                 else:
                     # Default to black rectangle
                     cv2.rectangle(masked_image, (x, y), (x + width, y + height), (0, 0, 0), -1)
-                
-                # Store masked area info
+
+                # Store masked area info in OCR-compatible format
                 masked_areas.append({
-                    "selection_id": area_data["selection_id"],
-                    "coordinates": area_data["coordinates"],
-                    "selection_type": selection_type,
-                    "encrypted_data": base64.b64encode(encrypted_data).decode(),
-                    "manual_selection": True
+                    "cipher": encrypted_text,
+                    "bbox": [[x, y], [x + width, y], [x + width, y + height], [x, y + height]],
+                    "confidence": 1.0,  # Manual selections have 100% confidence
+                    "original_image_base64": roi_base64
                 })
                 
                 areas_masked += 1
@@ -130,60 +131,33 @@ def process_manual_masking(image_path: str, selections, task_id: str) -> Dict[st
                 print(f"[ERROR] Failed to process selection {i+1}: {e}")
                 continue
         
-        # Generate output file paths
+        # Generate output file paths (matching OCR naming convention)
         name, ext = os.path.splitext(image_path)
-        output_image_path = f"{name}_manual_masked{ext}"
-        output_json_path = f"{name}_manual_review.json"
-        key_file_path = f"{name}_manual.key"
+        output_image_path = f"{name}_masked{ext}"
+        output_json_path = f"{name}_masked.json"
+        key_file_path = f"{name}.key"
         
         # Save the masked image
         cv2.imwrite(output_image_path, masked_image)
         print(f"[SUCCESS] Saved masked image: {output_image_path}")
         
-        # Save the encrypted data
-        manual_review_data = {
-            "task_id": task_id,
-            "original_image": os.path.basename(image_path),
-            "masked_image": os.path.basename(output_image_path),
-            "total_selections": len(selections),
-            "areas_masked": areas_masked,
-            "manual_review": True,
-            "masked_areas": masked_areas,
-            "image_dimensions": {
-                "width": original_width,
-                "height": original_height
-            }
-        }
-        
+        # Save the encrypted data in OCR-compatible format (array of objects)
         with open(output_json_path, 'w', encoding='utf-8') as f:
-            json.dump(manual_review_data, f, indent=2)
-        print(f"[SUCCESS] Saved review data: {output_json_path}")
+            json.dump(masked_areas, f, indent=2)
+        print(f"[SUCCESS] Saved encrypted data: {output_json_path}")
         
         # Save the encryption key
         with open(key_file_path, 'wb') as f:
             f.write(key)
         print(f"[SUCCESS] Saved encryption key: {key_file_path}")
         
-        # Convert paths to relative URLs for serving
-        base_path = os.path.dirname(image_path)
-        relative_base = base_path.replace("uploads", "/uploads").replace("\\", "/")
-        
-        result = {
-            "status": "success",
-            "masked_image": f"{relative_base}/{os.path.basename(output_image_path)}",
-            "json_output": f"{relative_base}/{os.path.basename(output_json_path)}",
-            "key_file": f"{relative_base}/{os.path.basename(key_file_path)}",
-            "areas_masked": areas_masked,
-            "total_selections": len(selections),
-            "manual_review": True,
-            "image_dimensions": {
-                "width": original_width,
-                "height": original_height
-            }
-        }
-        
         print(f"[SUCCESS] Manual masking completed: {areas_masked}/{len(selections)} areas processed")
-        return result
+        print(f"[SUCCESS] Masked image: {output_image_path}")
+        print(f"[SUCCESS] Encrypted data: {output_json_path}")
+        print(f"[SUCCESS] Encryption key: {key_file_path}")
+
+        # Return paths in same format as OCR service
+        return output_image_path, output_json_path, key_file_path
         
     except Exception as e:
         print(f"[ERROR] Manual masking failed: {e}")

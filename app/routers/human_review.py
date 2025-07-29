@@ -133,23 +133,34 @@ async def process_manual_selections(request: Request, review_request: ManualRevi
         # Process manual selections
         from app.services.manual_masking_service import process_manual_masking
 
-        result = process_manual_masking(
-            image_path=file_path,
-            selections=selections,
-            task_id=task_id
-        )
+        try:
+            output_image_path, output_json_path, key_file_path = process_manual_masking(
+                image_path=file_path,
+                selections=selections,
+                task_id=task_id
+            )
 
-        if result.get("status") == "success":
             # Get base URL for serving files
             base_url = str(request.base_url).rstrip('/')
 
+            # Convert absolute paths to relative URLs
+            base_path = os.path.dirname(file_path)
+            relative_base = base_path.replace("uploads", "/uploads").replace("\\", "/")
+
+            result = {
+                "status": "success",
+                "masked_image": f"{relative_base}/{os.path.basename(output_image_path)}",
+                "json_output": f"{relative_base}/{os.path.basename(output_json_path)}",
+                "key_file": f"{relative_base}/{os.path.basename(key_file_path)}",
+                "areas_masked": len(selections),
+                "total_selections": len(selections),
+                "manual_review": True
+            }
+
             # Update URLs to be accessible
-            if "masked_image" in result:
-                result["masked_image"] = base_url + result["masked_image"].replace("\\", "/")
-            if "json_output" in result:
-                result["json_output"] = base_url + result["json_output"].replace("\\", "/")
-            if "key_file" in result:
-                result["key_file"] = base_url + result["key_file"].replace("\\", "/")
+            result["masked_image"] = base_url + result["masked_image"].replace("\\", "/")
+            result["json_output"] = base_url + result["json_output"].replace("\\", "/")
+            result["key_file"] = base_url + result["key_file"].replace("\\", "/")
 
             # Log manual review processing
             if AUDIT_ENABLED:
@@ -203,9 +214,10 @@ async def process_manual_selections(request: Request, review_request: ManualRevi
             result["message"] = f"Successfully processed {areas_masked} out of {total_selections} selected areas"
 
             return JSONResponse(content=result)
-        else:
-            print(f"[ERROR] Manual masking failed: {result.get('message', 'Unknown error')}")
-            raise HTTPException(status_code=500, detail=result.get("message", "Processing failed"))
+
+        except Exception as processing_error:
+            print(f"[ERROR] Manual masking failed: {processing_error}")
+            raise HTTPException(status_code=500, detail=f"Processing failed: {str(processing_error)}")
 
     except HTTPException:
         raise
@@ -234,8 +246,8 @@ async def get_review_status(task_id: str, filename: str):
         masked_filename = f"{name}_masked{ext}"
         masked_exists = os.path.exists(os.path.join(task_path, masked_filename))
 
-        # Check if manual review has been performed
-        manual_review_file = os.path.join(task_path, f"{name}_manual_review.json")
+        # Check if manual review has been performed (check for masked.json file)
+        manual_review_file = os.path.join(task_path, f"{name}_masked.json")
         manual_review_performed = os.path.exists(manual_review_file)
 
         return JSONResponse(content={

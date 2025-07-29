@@ -69,6 +69,14 @@ async def process_task(task_id: str, request: Request):
                     result["key_file"] = base_url + result["key_file"].replace("\\", "/")
             elif ext in [".pdf"]:
                 result = run_pdf_processing(file_path, enabled_pii_categories)
+                # Convert relative paths to full URLs for PDF files
+                if isinstance(result, dict) and result.get("status") == "success":
+                    if "masked_pdf" in result:
+                        result["masked_pdf"] = base_url + result["masked_pdf"].replace("\\", "/")
+                    if "json_output" in result:
+                        result["json_output"] = base_url + result["json_output"].replace("\\", "/")
+                    if "key_file" in result:
+                        result["key_file"] = base_url + result["key_file"].replace("\\", "/")
             elif ext in [".txt", ".csv"]:
                 result = run_text_processing(file_path, enabled_pii_categories)
             elif ext in [".docx"]:

@@ -11,6 +11,40 @@ import base64
 
 from app.services.pii_main import extract_all_pii, extract_from_dictionaries
 from app.resources.dictionaries import NAMES, ORG_NAMES, RACES, STATUS
+import re
+
+def _should_ignore_word(text, ignore_words):
+    """
+    Check if text should be ignored based on exact word matching.
+    Uses word boundaries to avoid false positives from substring matching.
+
+    Args:
+        text (str): The text to check (should be lowercase)
+        ignore_words (set): Set of words to ignore (should be lowercase)
+
+    Returns:
+        bool: True if the text should be ignored
+    """
+    # Normalize the text
+    text = text.strip().lower()
+
+    # Check for exact match first
+    if text in ignore_words:
+        return True
+
+    # For multi-word ignore phrases, check if the entire text matches
+    # Split text into words and check if it forms any ignore phrase
+    text_words = re.findall(r'\b\w+\b', text)
+    text_phrase = ' '.join(text_words)
+
+    if text_phrase in ignore_words:
+        return True
+
+    # Check if text is a single word that should be ignored
+    if len(text_words) == 1 and text_words[0] in ignore_words:
+        return True
+
+    return False
 
 def mask_region_improved(image, x_min, y_min, x_max, y_max):
     """
@@ -154,19 +188,31 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
     print(f"[INFO] 提取到 {len(pii_entries)} 个PII项（包含选择性过滤）")
 
     # ✅ 业务级忽略词（只在图像遮罩场景中忽略）
+    # Note: Using exact word matching to avoid false positives
     IGNORE_WORDS = {
-        "malaysia", "mykad", "identity", "card", "kad", "pengenalan",
-        "warganegara", "lelaki", "perempuan", "bujang", "kawin",
-        "lel", "per", "male", "female", "citizen", "not citizen",
-        "id", "no", "identification", "type", "my", "k", "your", "name", "address", "phone", "email", "bank", "account", "number",
-        "passport", "ic", "ic number", "ic no", "ic no.", "Account", "account no", "account number", "bank account", "bank account no", "bank account number",
-        "bank", "bank name", "bank account name", "bank account holder", "bank account holder name", "bank account holder no",
-        "bank account holder id", "bank account holder ic", "bank account holder passport", "bank account holder mykad", "bank account holder identity card",
-        "bank account holder identity", "bank account holder identification", "bank account holder type",
-        "bank account holder name", "bank account holder address", "bank account holder phone", "bank account holder email",
-        "bank account holder dob", "bank account holder date of birth", "bank account holder", "Account Type", "Account No", "Account Number",
-        "Bank Statement", "Bank Account Statement", "Bank Account Statement No", "Bank Account Statement Number",
-        "Bank Account Statement Type", "Bank Account Statement Holder", "Bank Account Statement Holder Name", "Bank Statement Example", "Four Bank"
+        # Document artifacts and watermarks
+        "copy", "confidential", "draft", "sample", "example", "template", "specimen",
+        "watermark", "void", "duplicate", "original", "certified", "true copy",
+
+        # Malaysian document terms
+        "malaysia", "mykad", "identity", "card", "identity card", "kad", "pengenalan",
+        "kad pengenalan", "warganegara", "lelaki", "perempuan", "bujang", "kawin",
+        "male", "female", "citizen", "not citizen",
+
+        # Generic form labels (exact matches only)
+        "name", "address", "phone", "email", "type", "number",
+        "identification", "passport",
+
+        # Banking terms (form labels, not actual data)
+        "bank", "account", "account type", "account no", "account number",
+        "bank account", "bank name", "bank statement", "statement",
+        "account holder", "account holder name",
+
+        # Common short words that cause false positives (removed)
+        # Removed: "id", "no", "my", "k", "your" - too generic and cause false matches
+
+        # Specific document headers/footers
+        "bank statement example", "four bank", "specimen copy"
     }
 
     # ✅ 马来西亚地点白名单（用于 LOC 过滤）
@@ -186,8 +232,8 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
         if not original_val:
             continue
 
-        # 忽略通用非敏感词
-        if any(ignore in clean_val for ignore in IGNORE_WORDS):
+        # 忽略通用非敏感词 (使用精确词匹配，避免误判)
+        if _should_ignore_word(clean_val, IGNORE_WORDS):
             print(f"[SKIP] 忽略非敏感词: {original_val}")
             continue
 
@@ -227,6 +273,11 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
                 pass  # 可扩展：搜索邻近框拼接
 
         if not matched:
+            continue
+
+        # 检查是否应该忽略此文本（在遮罩前检查）
+        if _should_ignore_word(text, IGNORE_WORDS):
+            print(f"[SKIP] 忽略非敏感词（OCR阶段）: {text}")
             continue
 
         # 去重：使用 IOU 判断是否已处理

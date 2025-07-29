@@ -1,6 +1,10 @@
 # OCR/pii_main.py
 import re
+import os
+import json
+import time
 from datetime import datetime
+from typing import List, Tuple, Optional, Dict, Any
 from app.resources.dictionaries import NAMES, ORG_NAMES, RACES, STATUS, LOCATIONS, RELIGIONS
 
 # === 延迟加载模型 ===
@@ -32,6 +36,193 @@ def load_model():
             print(f"❌ Failed to load ML model: {e}")
             # Fallback to regex-only detection
             model_loaded = False
+
+# === ChatGPT API Integration ===
+chatgpt_enabled = False
+chatgpt_client = None
+
+def load_chatgpt_client():
+    """Initialize ChatGPT client if API key is available"""
+    global chatgpt_client, chatgpt_enabled
+
+    try:
+        # Try to get API key from environment variable
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            print("[INFO] OPENAI_API_KEY not found in environment variables")
+            print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
+            return False
+
+        # Try to import OpenAI
+        try:
+            from openai import OpenAI
+        except ImportError:
+            print("[WARN] OpenAI library not installed. Install with: pip install openai")
+            print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
+            return False
+
+        # Initialize client
+        chatgpt_client = OpenAI(api_key=api_key)
+        chatgpt_enabled = True
+        print("✅ ChatGPT API client initialized successfully")
+        return True
+
+    except Exception as e:
+        print(f"[WARN] Failed to initialize ChatGPT client: {e}")
+        print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
+        chatgpt_enabled = False
+        return False
+
+def extract_pii_with_chatgpt(text: str, enabled_categories: Optional[List[str]] = None) -> List[Tuple[str, str]]:
+    """
+    Use ChatGPT to identify PII in text with focus on Malaysian context
+
+    Args:
+        text: Text to analyze
+        enabled_categories: List of enabled PII categories
+
+    Returns:
+        List of (label, value) tuples
+    """
+    if not chatgpt_enabled or not chatgpt_client:
+        return []
+
+    if not text or len(text.strip()) < 10:
+        return []
+
+    # Default to all categories if none specified
+    if enabled_categories is None:
+        enabled_categories = list(SELECTABLE_PII_CATEGORIES.keys())
+
+    try:
+        # Create category-specific prompt
+        categories_desc = {
+            "NAMES": "Personal names (especially Malaysian names like 'Ahmad bin Ali', 'Ramba anak Sumping', 'Lidam anak Laja')",
+            "RACES": "Ethnic/racial information (Malay, Chinese, Indian, Iban, Dayak, etc.)",
+            "ORG_NAMES": "Company and organization names",
+            "STATUS": "Marital/social status (married, single, etc.)",
+            "LOCATIONS": "Geographic locations and addresses",
+            "RELIGIONS": "Religious affiliations",
+            "TRANSACTION NAME": "Every things that under TRANSACTION" 
+        }
+
+        enabled_desc = [f"- {cat}: {categories_desc.get(cat, cat)}" for cat in enabled_categories if cat in categories_desc]
+        categories_text = "\n".join(enabled_desc)
+
+        prompt = f"""You are a PII (Personally Identifiable Information) detection expert specializing in Malaysian documents.
+
+Analyze the following text and identify PII entities. Focus on these categories:
+{categories_text}
+
+IMPORTANT GUIDELINES:
+1. Focus on Malaysian context (names, addresses, cultural patterns)
+2. Ignore common document artifacts like: MALAYSIA, KAD PENGENALAN, IDENTITY CARD, LELAKI, PEREMPUAN, WARGANEGARA, COPY, CONFIDENTIAL
+3. Always detect: IC numbers, phone numbers, emails, credit cards (these are always sensitive)
+4. For Malaysian names, look for patterns like "anak", "bin", "binti"
+5. Be precise - only extract actual PII, not form labels
+
+Return ONLY a JSON array of objects with this format:
+[
+  {{"category": "NAMES", "value": "actual name found", "confidence": 0.95}},
+  {{"category": "IC", "value": "123456-78-9012", "confidence": 1.0}}
+]
+
+Text to analyze:
+{text}"""
+
+        # Call ChatGPT API
+        response = chatgpt_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a PII detection expert. Return only valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000,
+            temperature=0.1  # Low temperature for consistent results
+        )
+
+        # Parse response
+        response_text = response.choices[0].message.content.strip()
+
+        # Extract JSON from response (handle cases where GPT adds extra text)
+        json_start = response_text.find('[')
+        json_end = response_text.rfind(']') + 1
+
+        if json_start >= 0 and json_end > json_start:
+            json_text = response_text[json_start:json_end]
+            pii_data = json.loads(json_text)
+
+            # Convert to our format and filter by confidence
+            results = []
+            for item in pii_data:
+                if isinstance(item, dict) and 'category' in item and 'value' in item:
+                    category = item['category']
+                    value = item['value'].strip()
+                    confidence = item.get('confidence', 0.8)
+
+                    # Only include high-confidence results
+                    if confidence >= 0.7 and value:
+                        results.append((category, value))
+
+            print(f"[ChatGPT] Found {len(results)} PII items with confidence >= 0.7")
+            return results
+        else:
+            print("[WARN] ChatGPT response does not contain valid JSON")
+            return []
+
+    except json.JSONDecodeError as e:
+        print(f"[WARN] Failed to parse ChatGPT JSON response: {e}")
+        return []
+    except Exception as e:
+        print(f"[WARN] ChatGPT PII extraction failed: {e}")
+        return []
+
+def combine_pii_results(presidio_results: List[Tuple[str, str]],
+                       ner_results: List[Tuple[str, str]],
+                       chatgpt_results: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """
+    Combine results from multiple PII detection methods using consensus mechanism
+
+    Args:
+        presidio_results: Results from Presidio/regex detection
+        ner_results: Results from NER model
+        chatgpt_results: Results from ChatGPT
+
+    Returns:
+        Combined and deduplicated results
+    """
+    # Combine all results
+    all_results = presidio_results + ner_results + chatgpt_results
+
+    # Group by normalized value for deduplication
+    value_groups = {}
+    for label, value in all_results:
+        normalized_value = value.strip().lower()
+        if normalized_value not in value_groups:
+            value_groups[normalized_value] = []
+        value_groups[normalized_value].append((label, value))
+
+    # Apply consensus logic
+    final_results = []
+    for normalized_value, candidates in value_groups.items():
+        if len(candidates) == 1:
+            # Single detection - include if from reliable source
+            label, value = candidates[0]
+            final_results.append((label, value))
+        else:
+            # Multiple detections - use consensus
+            # Count votes for each label
+            label_votes = {}
+            for label, value in candidates:
+                label_votes[label] = label_votes.get(label, 0) + 1
+
+            # Choose most voted label, prefer original case
+            best_label = max(label_votes.keys(), key=lambda k: label_votes[k])
+            best_value = next(value for label, value in candidates if label == best_label)
+            final_results.append((best_label, best_value))
+
+    print(f"[CONSENSUS] Combined {len(all_results)} detections into {len(final_results)} final results")
+    return final_results
 
 # === 通用忽略词（非敏感，不需加密）===
 IGNORE_WORDS = {
@@ -113,25 +304,23 @@ def extract_phone(text):
     return matches
 
 def extract_money(text):
-    # 更严格的金额匹配
     patterns = [
         r'\b\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\b',  # e.g. 1,234.56 or 1,234
-        r'\b\d{4,}(?:\.\d{1,2})?\b',              # e.g. 1234.5 or 1234.56
-        r'\b\d{3}\.\d{1,2}\b'                     # e.g. 123.4 or 123.45
+        r'\b\d{1,}(?:\.\d{1,2})?\b',             # e.g. 1234.5, 1234.56, or 12.00
     ]
     matches = []
     for pattern in patterns:
         matches.extend(re.findall(pattern, text))
+
     unique_matches = list(set(matches))
     filtered_matches = []
     for match in unique_matches:
         try:
             num_value = float(match.replace(',', ''))
-            # 只保留合理的金额范围（避免匹配日期、编号等）
-            if 10 <= num_value <= 10000000:  # 10到1000万之间
+            if 0.01 <= num_value <= 10000000:  # 改为保留几乎所有正金额
                 filtered_matches.append(match)
         except ValueError:
-            continue  # 跳过无法转换的值
+            continue
     return filtered_matches
 
 def extract_gender(text):
@@ -231,7 +420,7 @@ def validate_credit_card(cc_number):
 
 def validate_phone_number(phone):
     """验证电话号码格式"""
-    clean_phone = re.sub(r'[\s-+]', '', phone)
+    clean_phone = re.sub(r'[\s+\-]', '', phone)
 
     # 马来西亚手机号码验证
     if clean_phone.startswith('60'):
@@ -382,10 +571,10 @@ NON_SELECTABLE_PII_CATEGORIES = {
     "Vehicle Registration": "Vehicle registration numbers"
 }
 
-# ✅ 主函数：提取所有 PII（带选择性过滤）
+# ✅ 主函数：提取所有 PII（带选择性过滤 + ChatGPT增强）
 def extract_all_pii(text, enabled_categories=None):
     """
-    提取PII，支持选择性类别过滤
+    提取PII，支持选择性类别过滤，集成ChatGPT增强检测
 
     Args:
         text: 要分析的文本
@@ -399,7 +588,16 @@ def extract_all_pii(text, enabled_categories=None):
     if enabled_categories is None:
         enabled_categories = list(SELECTABLE_PII_CATEGORIES.keys())
 
-    results = []
+    # Initialize ChatGPT client if not already done
+    if not chatgpt_enabled:
+        load_chatgpt_client()
+
+    print(f"[INFO] PII检测开始 - 启用类别: {enabled_categories}")
+    print(f"[INFO] 检测方法: NER + Regex + Dictionary + {'ChatGPT' if chatgpt_enabled else 'No ChatGPT'}")
+
+    presidio_regex_results = []
+    ner_results = []
+    chatgpt_results = []
 
     # --- 1. NER 提取（细粒度）---
     try:
@@ -408,12 +606,12 @@ def extract_all_pii(text, enabled_categories=None):
             load_model()
 
         if ner_pipeline is not None:
-            ner_results = ner_pipeline(text)
+            ner_raw_results = ner_pipeline(text)
         else:
             print("[WARN] NER model not available, using regex-only detection")
-            ner_results = []
+            ner_raw_results = []
         tokens = []
-        for ent in ner_results:
+        for ent in ner_raw_results:
             word = ent["word"]
             entity = ent["entity"].replace("B-", "").replace("I-", "")
             # 判断是否是新词开始
@@ -432,7 +630,7 @@ def extract_all_pii(text, enabled_categories=None):
             # 如果是新词，结束当前词
             if current_label and tok["is_new_word"]:
                 if current_word:
-                    results.append((current_label, current_word))
+                    ner_results.append((current_label, current_word))
                 current_word = tok["word"]
                 current_label = tok["entity"]
             # 如果是延续（## 或 ▁ 开头），且实体类型相同，则拼接
@@ -441,13 +639,15 @@ def extract_all_pii(text, enabled_categories=None):
             # 不同类型，先结束旧的，再开新的
             else:
                 if current_word:
-                    results.append((current_label, current_word))
+                    ner_results.append((current_label, current_word))
                 current_word = tok["word"]
                 current_label = tok["entity"]
 
         # 结束最后一个
         if current_word:
-            results.append((current_label, current_word))
+            ner_results.append((current_label, current_word))
+
+        print(f"[NER] Found {len(ner_results)} entities")
 
     except Exception as e:
         print(f"[WARN] NER 提取失败: {e}")
@@ -466,7 +666,6 @@ def extract_all_pii(text, enabled_categories=None):
         "Credit Card": extract_credit_card,
         "Address": extract_malaysian_address,
         "Vehicle Registration": extract_vehicle_registration,
-        "Name": lambda t: [],  # 可扩展：姓名规则
     }
 
     print(f"[INFO] 开始正则提取，共 {len(extractors)} 种PII类型")
@@ -474,17 +673,31 @@ def extract_all_pii(text, enabled_categories=None):
     for label, func in extractors.items():
         matches = func(text)
         for match in matches:
-            results.append((label, match.strip()))
+            presidio_regex_results.append((label, match.strip()))
 
     # --- 3. 字典匹配补充（选择性过滤）---
     dict_results = extract_from_dictionaries(text, enabled_categories)
     for label, value in dict_results:
-        results.append((label, value))
+        presidio_regex_results.append((label, value))
 
-    # --- 4. 去重 + 过滤非敏感词 ---
+    print(f"[PRESIDIO/REGEX] Found {len(presidio_regex_results)} entities")
+
+    # --- 4. ChatGPT 增强检测 ---
+    if chatgpt_enabled and len(text.strip()) >= 20:  # Only use ChatGPT for substantial text
+        print("[INFO] 开始ChatGPT增强检测...")
+        chatgpt_results = extract_pii_with_chatgpt(text, enabled_categories)
+        print(f"[ChatGPT] Found {len(chatgpt_results)} entities")
+    else:
+        print("[INFO] ChatGPT检测跳过 (未启用或文本过短)")
+
+    # --- 5. 结果合并与共识机制 ---
+    print("[INFO] 应用共识机制合并检测结果...")
+    combined_results = combine_pii_results(presidio_regex_results, ner_results, chatgpt_results)
+
+    # --- 6. 去重 + 过滤非敏感词 ---
     seen = set()
     filtered_results = []
-    for label, value in results:
+    for label, value in combined_results:
         clean_val = value.strip().lower()
         # 跳过空值和忽略词
         if not clean_val or clean_val in IGNORE_WORDS:
@@ -493,4 +706,5 @@ def extract_all_pii(text, enabled_categories=None):
             seen.add(clean_val)
             filtered_results.append((label, value.strip()))  # 保留原始大小写
 
+    print(f"[FINAL] 最终检测到 {len(filtered_results)} 个PII项")
     return filtered_results

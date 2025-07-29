@@ -6,7 +6,7 @@ from cryptography.fernet import Fernet
 from docx import Document
 from app.services.pii_main import extract_all_pii
 
-def mask_docx_sensitive_text(docx_path: str, key_path: str = None):
+def mask_docx_sensitive_text(docx_path: str, key_path: str = None, enabled_pii_categories=None):
     if key_path is None:
         key_path = docx_path.replace(".docx", ".key")
 
@@ -24,14 +24,14 @@ def mask_docx_sensitive_text(docx_path: str, key_path: str = None):
     masked_pii = []
     
     for para in document.paragraphs:
-        for ent in extract_all_pii(para.text):
-            encrypted = fernet.encrypt(ent["entity"].encode()).decode()
-            masked = f"[ENC:{ent['label']}]"
-            para.text = para.text.replace(ent["entity"], masked)
+        for label, entity in extract_all_pii(para.text, enabled_pii_categories):
+            encrypted = fernet.encrypt(entity.encode()).decode()
+            masked = f"[ENC:{label}]"
+            para.text = para.text.replace(entity, masked)
             masked_pii.append({
-                "original": ent["entity"],
+                "original": entity,
                 "encrypted": encrypted,
-                "label": ent["label"],
+                "label": label,
                 "masked": masked
             })
 
@@ -45,11 +45,11 @@ def mask_docx_sensitive_text(docx_path: str, key_path: str = None):
 
     return masked_path, json_path, key_path
 
-def run_docx_processing(docx_path: str):
+def run_docx_processing(docx_path: str, enabled_pii_categories=None):
     try:
         key_path = docx_path.replace(".docx", ".key")
         masked_docx, json_path, key_file = mask_docx_sensitive_text(
-            docx_path, key_path
+            docx_path, key_path, enabled_pii_categories
         )
         return {
             "status": "success",
