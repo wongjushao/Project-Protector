@@ -110,15 +110,40 @@ class AuditService:
         file_content: bytes = None,
         processing_time: float = None,
         status: str = "success",
-        error_message: str = None
+        error_message: str = None,
+        pii_found_data: Dict[str, Any] = None
     ) -> str:
-        """Log file operation (upload, process, download)"""
+        """Log file operation (upload, process, download) with PII data"""
         try:
+            db = self._get_db()
+
+            # Ensure session exists, create if not
+            session = db.query(AuditSession).filter(
+                AuditSession.session_id == session_id
+            ).first()
+
+            if not session:
+                logger.info(f"Creating missing audit session: {session_id}")
+                self.create_session(session_id, ip_address, user_agent)
+
             # Generate file hash for integrity
             file_hash = None
             if file_content:
                 file_hash = hashlib.sha256(file_content).hexdigest()
-            
+
+            # Prepare PII data for storage
+            pii_summary = {}
+            if pii_found_data:
+                # Extract PII summary from the processing results
+                pii_summary = {
+                    "total_pii_found": pii_found_data.get("total_pii_found", 0),
+                    "total_pii_masked": pii_found_data.get("total_pii_masked", 0),
+                    "selectable_pii": pii_found_data.get("selectable_pii_found", {}),
+                    "non_selectable_pii": pii_found_data.get("non_selectable_pii_found", {}),
+                    "detection_methods": pii_found_data.get("detection_methods", []),
+                    "confidence_scores": pii_found_data.get("confidence_scores", [])
+                }
+
             file_op = FileOperationLog(
                 session_id=session_id,
                 task_id=task_id,
@@ -130,25 +155,42 @@ class AuditService:
                 file_hash=file_hash,
                 enabled_pii_categories=enabled_pii_categories,
                 total_pii_categories=len(enabled_pii_categories) if enabled_pii_categories else 0,
+                pii_processing_summary=pii_summary if pii_summary else None,
                 processing_time_seconds=processing_time,
                 status=status,
                 error_message=error_message,
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            
-            self.db.add(file_op)
-            self.db.commit()
-            
+
+            db.add(file_op)
+            db.commit()
+
+            # Log detailed PII processing if data provided
+            if pii_found_data and operation_type == "process":
+                self.log_pii_processing(
+                    session_id=session_id,
+                    file_operation_id=file_op.id,
+                    total_pii_found=pii_summary.get("total_pii_found", 0),
+                    total_pii_masked=pii_summary.get("total_pii_masked", 0),
+                    processing_time=processing_time or 0.0,
+                    selectable_pii_found=pii_summary.get("selectable_pii", {}),
+                    non_selectable_pii_found=pii_summary.get("non_selectable_pii", {}),
+                    masked_categories=enabled_pii_categories or [],
+                    average_confidence=pii_found_data.get("average_confidence"),
+                    low_confidence_count=pii_found_data.get("low_confidence_count", 0)
+                )
+
             # Update session activity
             self.update_session_activity(session_id)
-            
+
             logger.info(f"✅ Logged file operation: {operation_type} - {file_name}")
             return file_op.id
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to log file operation: {e}")
-            self.db.rollback()
+            if self.db:
+                self.db.rollback()
             return None
     
     # ===== PII PROCESSING =====

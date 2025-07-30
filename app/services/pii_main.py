@@ -73,9 +73,55 @@ def load_chatgpt_client():
         chatgpt_enabled = False
         return False
 
+def chunk_text_intelligently(text: str, max_chunk_size: int = 3000) -> List[str]:
+    """
+    Intelligently chunk text to avoid breaking PII entities across chunks
+
+    Args:
+        text: Text to chunk
+        max_chunk_size: Maximum characters per chunk
+
+    Returns:
+        List of text chunks
+    """
+    if len(text) <= max_chunk_size:
+        return [text]
+
+    chunks = []
+    current_chunk = ""
+
+    # Split by paragraphs first, then sentences if needed
+    paragraphs = text.split('\n\n')
+
+    for paragraph in paragraphs:
+        # If adding this paragraph would exceed chunk size
+        if len(current_chunk) + len(paragraph) > max_chunk_size:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+                current_chunk = ""
+
+            # If single paragraph is too long, split by sentences
+            if len(paragraph) > max_chunk_size:
+                sentences = paragraph.split('. ')
+                for sentence in sentences:
+                    if len(current_chunk) + len(sentence) > max_chunk_size:
+                        if current_chunk:
+                            chunks.append(current_chunk.strip())
+                            current_chunk = ""
+                    current_chunk += sentence + ". "
+            else:
+                current_chunk = paragraph
+        else:
+            current_chunk += "\n\n" + paragraph if current_chunk else paragraph
+
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+
+    return chunks
+
 def extract_pii_with_chatgpt(text: str, enabled_categories: Optional[List[str]] = None) -> List[Tuple[str, str]]:
     """
-    Use ChatGPT to identify PII in text with focus on Malaysian context
+    Use ChatGPT to identify PII in text with focus on Malaysian context and intelligent chunking
 
     Args:
         text: Text to analyze
@@ -87,112 +133,292 @@ def extract_pii_with_chatgpt(text: str, enabled_categories: Optional[List[str]] 
     if not chatgpt_enabled or not chatgpt_client:
         return []
 
-    if not text or len(text.strip()) < 10:
+    if not text or len(text.strip()) < 20:  # Minimum meaningful text length
         return []
 
     # Default to all categories if none specified
     if enabled_categories is None:
         enabled_categories = list(SELECTABLE_PII_CATEGORIES.keys())
 
-    try:
-        # Create category-specific prompt
-        categories_desc = {
-            "NAMES": "Personal names (especially Malaysian names like 'Ahmad bin Ali', 'Ramba anak Sumping', 'Lidam anak Laja')",
-            "RACES": "Ethnic/racial information (Malay, Chinese, Indian, Iban, Dayak, etc.)",
-            "ORG_NAMES": "Company and organization names",
-            "STATUS": "Marital/social status (married, single, etc.)",
-            "LOCATIONS": "Geographic locations and addresses",
-            "RELIGIONS": "Religious affiliations",
-            "TRANSACTION NAME": "Every things that under TRANSACTION" 
-        }
+    # Chunk text if it's too long for ChatGPT
+    text_chunks = chunk_text_intelligently(text, max_chunk_size=3000)
+    all_results = []
 
-        enabled_desc = [f"- {cat}: {categories_desc.get(cat, cat)}" for cat in enabled_categories if cat in categories_desc]
-        categories_text = "\n".join(enabled_desc)
+    print(f"[ChatGPT] Processing {len(text_chunks)} text chunks")
 
-        prompt = f"""You are a PII (Personally Identifiable Information) detection expert specializing in Malaysian documents.
+    for chunk_idx, chunk in enumerate(text_chunks):
+        try:
+            # Create enhanced category-specific prompt for financial documents
+            categories_desc = {
+                "NAMES": "Personal names (Malaysian names like 'Ahmad bin Ali', 'WONG JUN KEAT', 'Ramba anak Sumping')",
+                "RACES": "Ethnic/racial information (Malay, Chinese, Indian, Iban, Dayak, etc.)",
+                "ORG_NAMES": "Company and organization names (banks, corporations, government agencies)",
+                "STATUS": "Marital/social status (married, single, etc.)",
+                "LOCATIONS": "Geographic locations and addresses (Malaysian cities, states, postal codes)",
+                "RELIGIONS": "Religious affiliations",
+                "TRANSACTION NAME": "Transaction descriptions and references"
+            }
+
+            enabled_desc = [f"- {cat}: {categories_desc.get(cat, cat)}" for cat in enabled_categories if cat in categories_desc]
+            categories_text = "\n".join(enabled_desc)
+
+            # Enhanced prompt for better financial document detection
+            prompt = f"""You are a PII detection expert specializing in Malaysian financial and identity documents.
 
 Analyze the following text and identify PII entities. Focus on these categories:
 {categories_text}
 
-IMPORTANT GUIDELINES:
-1. Focus on Malaysian context (names, addresses, cultural patterns)
-2. Ignore common document artifacts like: MALAYSIA, KAD PENGENALAN, IDENTITY CARD, LELAKI, PEREMPUAN, WARGANEGARA, COPY, CONFIDENTIAL
-3. Always detect: IC numbers, phone numbers, emails, credit cards (these are always sensitive)
-4. For Malaysian names, look for patterns like "anak", "bin", "binti"
-5. Be precise - only extract actual PII, not form labels
+CRITICAL DETECTION RULES:
+1. ALWAYS detect these sensitive items regardless of category settings:
+   - IC numbers (format: 123456-78-9012 or similar)
+   - Account numbers (long digit sequences: 1234567890123456)
+   - Phone numbers (+60123456789, 03-77855409, etc.)
+   - Email addresses
+   - Credit card numbers
 
-Return ONLY a JSON array of objects with this format:
+2. For Malaysian context:
+   - Names: Look for Malaysian naming patterns (bin, binti, anak, Chinese names like WONG, LIM, TAN)
+   - Locations: Malaysian cities (KUALA LUMPUR, PETALING JAYA, JOHOR BAHRU, etc.)
+   - Banks: Malaysian bank names (Maybank, CIMB, Public Bank, etc.)
+
+3. IGNORE these document artifacts:
+   - MALAYSIA, KAD PENGENALAN, IDENTITY CARD, LELAKI, PEREMPUAN, WARGANEGARA
+   - COPY, CONFIDENTIAL, SPECIMEN, SAMPLE
+   - Form labels and headers
+
+4. For bank statements specifically:
+   - Account holder names
+   - Account numbers (typically 10-16 digits)
+   - Transaction reference numbers
+   - Branch codes and addresses
+   - Phone numbers and contact details
+
+Return ONLY a JSON array with this exact format:
 [
-  {{"category": "NAMES", "value": "actual name found", "confidence": 0.95}},
-  {{"category": "IC", "value": "123456-78-9012", "confidence": 1.0}}
+  {{"category": "NAMES", "value": "WONG JUN KEAT", "confidence": 0.95}},
+  {{"category": "ACCOUNT", "value": "1234567890123456", "confidence": 1.0}},
+  {{"category": "PHONE", "value": "03-77855409", "confidence": 0.9}}
 ]
 
-Text to analyze:
-{text}"""
+Text to analyze (chunk {chunk_idx + 1}/{len(text_chunks)}):
+{chunk}"""
 
-        # Call ChatGPT API
+            # Call ChatGPT API
+            response = chatgpt_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a PII detection expert. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.1  # Low temperature for consistent results
+            )
+
+            # Parse response
+            response_text = response.choices[0].message.content.strip()
+
+            # Extract JSON from response (handle cases where GPT adds extra text)
+            json_start = response_text.find('[')
+            json_end = response_text.rfind(']') + 1
+
+            if json_start >= 0 and json_end > json_start:
+                json_text = response_text[json_start:json_end]
+                pii_data = json.loads(json_text)
+
+                # Convert to our format and filter by confidence
+                chunk_results = []
+                for item in pii_data:
+                    if isinstance(item, dict) and 'category' in item and 'value' in item:
+                        category = item['category']
+                        value = item['value'].strip()
+                        confidence = item.get('confidence', 0.8)
+
+                        # Only include high-confidence results
+                        if confidence >= 0.7 and value:
+                            chunk_results.append((category, value))
+
+                all_results.extend(chunk_results)
+                print(f"[ChatGPT] Chunk {chunk_idx + 1}: Found {len(chunk_results)} PII items")
+            else:
+                print(f"[WARN] ChatGPT chunk {chunk_idx + 1}: No valid JSON in response")
+
+        except json.JSONDecodeError as e:
+            print(f"[WARN] ChatGPT chunk {chunk_idx + 1}: JSON parsing failed: {e}")
+            continue
+        except Exception as e:
+            print(f"[WARN] ChatGPT chunk {chunk_idx + 1}: Processing failed: {e}")
+            continue
+
+    print(f"[ChatGPT] Total found across all chunks: {len(all_results)} PII items")
+    return all_results
+
+def validate_pii_with_chatgpt_context(text: str, candidate_pii: List[Tuple[str, str]], enabled_categories: Optional[List[str]] = None) -> List[Tuple[str, str]]:
+    """
+    Stage 2: Use ChatGPT to validate and filter PII candidates based on context
+
+    Args:
+        text: Original full text for context
+        candidate_pii: List of (label, value) tuples from Stage 1 detection
+        enabled_categories: List of enabled PII categories
+
+    Returns:
+        Filtered list of (label, value) tuples that are truly PII
+    """
+    if not chatgpt_enabled or not chatgpt_client:
+        print("[INFO] ChatGPT contextual validation skipped (not enabled)")
+        return candidate_pii
+
+    if not candidate_pii:
+        print("[INFO] No PII candidates to validate")
+        return []
+
+    if len(text.strip()) < 50:
+        print("[INFO] Text too short for contextual validation")
+        return candidate_pii
+
+    print(f"[ChatGPT-VALIDATION] Starting contextual validation of {len(candidate_pii)} candidates")
+
+    try:
+        # Prepare candidate list for ChatGPT analysis
+        candidates_text = "\n".join([f"- {label}: '{value}'" for label, value in candidate_pii])
+
+        # Create context-aware validation prompt
+        prompt = f"""You are a PII validation expert specializing in Malaysian documents.
+
+I have detected potential PII entities in a document, but need your help to filter out false positives and validate which items are truly sensitive personal information that should be masked.
+
+ORIGINAL DOCUMENT CONTEXT:
+{text[:2000]}{"..." if len(text) > 2000 else ""}
+
+DETECTED PII CANDIDATES:
+{candidates_text}
+
+VALIDATION RULES:
+1. **ALWAYS KEEP as PII (regardless of context)**:
+   - IC numbers (123456-78-9012 format)
+   - Phone numbers (+60123456789, 03-77855409)
+   - Email addresses
+   - Credit card numbers
+   - Bank account numbers (long digit sequences)
+
+2. **EVALUATE CONTEXTUALLY**:
+   - Personal names: Keep if referring to individuals (account holders, customers)
+   - Organization names: Remove if just company headers/logos (PUBLIC BANK, MAYBANK)
+   - Locations: Keep if personal addresses, remove if just branch locations
+   - Amounts: Remove if transaction amounts, keep if account numbers
+   - Dates: Remove if transaction dates, keep if birth dates
+
+3. **MALAYSIAN CONTEXT**:
+   - Names like "WONG JUN KEAT", "Ahmad bin Ali" are personal names → KEEP
+   - Bank names like "PUBLIC BANK", "MAYBANK" in headers → REMOVE
+   - Cities like "KUALA LUMPUR" in addresses → KEEP, in branch info → REMOVE
+   - "MALAYSIA" as country name → REMOVE
+
+4. **DOCUMENT ARTIFACTS TO REMOVE**:
+   - Bank names in headers/letterheads
+   - Branch names and codes
+   - Transaction categories/descriptions
+   - Currency symbols and amounts
+   - Form labels and instructions
+
+Return ONLY a JSON array of items that should be KEPT (truly sensitive PII):
+[
+  {{"label": "NAMES", "value": "WONG JUN KEAT", "reason": "Personal account holder name"}},
+  {{"label": "IC", "value": "123456-78-9012", "reason": "Personal identification number"}},
+  {{"label": "PHONE", "value": "03-77855409", "reason": "Personal contact number"}}
+]
+
+Focus on protecting individual privacy while removing corporate/institutional information."""
+
+        # Call ChatGPT for validation
         response = chatgpt_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a PII detection expert. Return only valid JSON."},
+                {"role": "system", "content": "You are a PII validation expert. Return only valid JSON with items that truly need privacy protection."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=1000,
-            temperature=0.1  # Low temperature for consistent results
+            max_tokens=1500,
+            temperature=0.1
         )
 
-        # Parse response
         response_text = response.choices[0].message.content.strip()
 
-        # Extract JSON from response (handle cases where GPT adds extra text)
+        # Extract JSON from response
         json_start = response_text.find('[')
         json_end = response_text.rfind(']') + 1
 
         if json_start >= 0 and json_end > json_start:
             json_text = response_text[json_start:json_end]
-            pii_data = json.loads(json_text)
+            validated_data = json.loads(json_text)
 
-            # Convert to our format and filter by confidence
-            results = []
-            for item in pii_data:
-                if isinstance(item, dict) and 'category' in item and 'value' in item:
-                    category = item['category']
+            # Convert back to our format
+            validated_results = []
+            for item in validated_data:
+                if isinstance(item, dict) and 'label' in item and 'value' in item:
+                    label = item['label']
                     value = item['value'].strip()
-                    confidence = item.get('confidence', 0.8)
+                    reason = item.get('reason', 'Validated by ChatGPT')
 
-                    # Only include high-confidence results
-                    if confidence >= 0.7 and value:
-                        results.append((category, value))
+                    if value:
+                        validated_results.append((label, value))
+                        print(f"[ChatGPT-VALIDATION] KEEP: {label} = '{value}' ({reason})")
 
-            print(f"[ChatGPT] Found {len(results)} PII items with confidence >= 0.7")
-            return results
+            # Show what was filtered out
+            original_values = {value.lower() for _, value in candidate_pii}
+            validated_values = {value.lower() for _, value in validated_results}
+            filtered_out = original_values - validated_values
+
+            if filtered_out:
+                print(f"[ChatGPT-VALIDATION] FILTERED OUT: {len(filtered_out)} items")
+                for value in list(filtered_out)[:5]:  # Show first 5
+                    print(f"[ChatGPT-VALIDATION] REMOVED: '{value}' (document artifact)")
+                if len(filtered_out) > 5:
+                    print(f"[ChatGPT-VALIDATION] ... and {len(filtered_out) - 5} more")
+
+            print(f"[ChatGPT-VALIDATION] Final result: {len(validated_results)}/{len(candidate_pii)} candidates validated as true PII")
+            return validated_results
         else:
-            print("[WARN] ChatGPT response does not contain valid JSON")
-            return []
+            print("[WARN] ChatGPT validation: No valid JSON in response")
+            return candidate_pii
 
     except json.JSONDecodeError as e:
-        print(f"[WARN] Failed to parse ChatGPT JSON response: {e}")
-        return []
+        print(f"[WARN] ChatGPT validation JSON parsing failed: {e}")
+        return candidate_pii
     except Exception as e:
-        print(f"[WARN] ChatGPT PII extraction failed: {e}")
-        return []
+        print(f"[WARN] ChatGPT validation failed: {e}")
+        return candidate_pii
 
 def combine_pii_results(presidio_results: List[Tuple[str, str]],
                        ner_results: List[Tuple[str, str]],
                        chatgpt_results: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """
-    Combine results from multiple PII detection methods using consensus mechanism
+    Combine results from multiple PII detection methods using enhanced consensus mechanism
 
     Args:
         presidio_results: Results from Presidio/regex detection
-        ner_results: Results from NER model
+        ner_results: Results from NER model (may be empty if failed)
         chatgpt_results: Results from ChatGPT
 
     Returns:
         Combined and deduplicated results
     """
+    # Track which methods provided results
+    methods_used = []
+    if presidio_results:
+        methods_used.append("Presidio/Regex")
+    if ner_results:
+        methods_used.append("NER")
+    if chatgpt_results:
+        methods_used.append("ChatGPT")
+
+    print(f"[CONSENSUS] Active detection methods: {', '.join(methods_used)}")
+
     # Combine all results
     all_results = presidio_results + ner_results + chatgpt_results
+
+    if not all_results:
+        print("[CONSENSUS] No PII detected by any method")
+        return []
 
     # Group by normalized value for deduplication
     value_groups = {}
@@ -202,22 +428,50 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
             value_groups[normalized_value] = []
         value_groups[normalized_value].append((label, value))
 
-    # Apply consensus logic
+    # Apply enhanced consensus logic
     final_results = []
     for normalized_value, candidates in value_groups.items():
         if len(candidates) == 1:
-            # Single detection - include if from reliable source
+            # Single detection - include it
             label, value = candidates[0]
             final_results.append((label, value))
         else:
-            # Multiple detections - use consensus
-            # Count votes for each label
+            # Multiple detections - use consensus with priority
+            # Priority: ChatGPT > Presidio/Regex > NER for conflicting labels
             label_votes = {}
-            for label, value in candidates:
-                label_votes[label] = label_votes.get(label, 0) + 1
+            label_sources = {}
 
-            # Choose most voted label, prefer original case
-            best_label = max(label_votes.keys(), key=lambda k: label_votes[k])
+            for label, value in candidates:
+                if label not in label_votes:
+                    label_votes[label] = 0
+                    label_sources[label] = []
+                label_votes[label] += 1
+
+                # Determine source method (approximate)
+                if (label, value) in chatgpt_results:
+                    label_sources[label].append("ChatGPT")
+                elif (label, value) in presidio_results:
+                    label_sources[label].append("Presidio")
+                else:
+                    label_sources[label].append("NER")
+
+            # Choose best label with priority weighting
+            best_label = None
+            best_score = 0
+
+            for label, votes in label_votes.items():
+                score = votes
+                # Boost score based on source reliability
+                if "ChatGPT" in label_sources[label]:
+                    score += 2  # ChatGPT gets priority for context awareness
+                if "Presidio" in label_sources[label]:
+                    score += 1  # Regex patterns are reliable
+
+                if score > best_score:
+                    best_score = score
+                    best_label = label
+
+            # Get the best value (prefer original case)
             best_value = next(value for label, value in candidates if label == best_label)
             final_results.append((best_label, best_value))
 
@@ -304,25 +558,23 @@ def extract_phone(text):
     return matches
 
 def extract_money(text):
-    patterns = [
-        r'\b\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\b',  # e.g. 1,234.56 or 1,234
-        r'\b\d{1,}(?:\.\d{1,2})?\b',             # e.g. 1234.5, 1234.56, or 12.00
-    ]
-    matches = []
-    for pattern in patterns:
-        matches.extend(re.findall(pattern, text))
-
-    unique_matches = list(set(matches))
+    pattern = r'\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\b'
+    
+    raw_matches = re.findall(pattern, text)
     filtered_matches = []
-    for match in unique_matches:
+    seen = set()
+
+    for match in raw_matches:
         try:
-            num_value = float(match.replace(',', ''))
-            if 0.01 <= num_value <= 10000000:  # 改为保留几乎所有正金额
+            normalized = match.replace(',', '')
+            num = float(normalized)
+            if 0.01 <= num <= 10_000_000 and match not in seen:
                 filtered_matches.append(match)
+                seen.add(match)
         except ValueError:
             continue
-    return filtered_matches
 
+    return filtered_matches
 def extract_gender(text):
     return re.findall(r'\b(LELAKI|PEREMPUAN|MALE|FEMALE)\b', text, re.I)
 
@@ -592,21 +844,49 @@ def extract_all_pii(text, enabled_categories=None):
     if not chatgpt_enabled:
         load_chatgpt_client()
 
-    print(f"[INFO] PII检测开始 - 启用类别: {enabled_categories}")
-    print(f"[INFO] 检测方法: NER + Regex + Dictionary + {'ChatGPT' if chatgpt_enabled else 'No ChatGPT'}")
+    print(f"[INFO] PII detection started - Enabled categories: {enabled_categories}")
+    print(f"[INFO] Detection methods: NER + Regex + Dictionary + {'ChatGPT' if chatgpt_enabled else 'No ChatGPT'}")
 
     presidio_regex_results = []
     ner_results = []
     chatgpt_results = []
 
-    # --- 1. NER 提取（细粒度）---
+    # --- 1. NER 提取（细粒度）with token limit handling ---
     try:
         # Load model if not already loaded
         if not model_loaded:
             load_model()
 
         if ner_pipeline is not None:
-            ner_raw_results = ner_pipeline(text)
+            # Handle token limit by chunking text for NER
+            text_length = len(text.split())
+            max_tokens = 300  # Conservative limit for NER model (model limit is ~512 tokens)
+
+            if text_length > max_tokens:
+                print(f"[NER] Text too long ({text_length} tokens), chunking for NER processing...")
+                # Split text into smaller chunks for NER
+                words = text.split()
+                chunk_size = max_tokens
+                ner_raw_results = []
+
+                for i in range(0, len(words), chunk_size):
+                    chunk_words = words[i:i + chunk_size]
+                    chunk_text = " ".join(chunk_words)
+
+                    # Additional safety check - if chunk is still too long, skip it
+                    if len(chunk_text.split()) > max_tokens:
+                        print(f"[WARN] NER chunk {i//chunk_size + 1} still too long, skipping")
+                        continue
+
+                    try:
+                        chunk_results = ner_pipeline(chunk_text)
+                        ner_raw_results.extend(chunk_results)
+                        print(f"[NER] Processed chunk {i//chunk_size + 1}: {len(chunk_results)} entities")
+                    except Exception as chunk_e:
+                        print(f"[WARN] NER chunk {i//chunk_size + 1} failed: {chunk_e}")
+                        continue
+            else:
+                ner_raw_results = ner_pipeline(text)
         else:
             print("[WARN] NER model not available, using regex-only detection")
             ner_raw_results = []
@@ -651,6 +931,7 @@ def extract_all_pii(text, enabled_categories=None):
 
     except Exception as e:
         print(f"[WARN] NER 提取失败: {e}")
+        print("[INFO] Continuing with regex and ChatGPT detection methods")
 
     # --- 2. 增强的正则规则补充 ---
     extractors = {
@@ -683,28 +964,53 @@ def extract_all_pii(text, enabled_categories=None):
     print(f"[PRESIDIO/REGEX] Found {len(presidio_regex_results)} entities")
 
     # --- 4. ChatGPT 增强检测 ---
-    if chatgpt_enabled and len(text.strip()) >= 20:  # Only use ChatGPT for substantial text
-        print("[INFO] 开始ChatGPT增强检测...")
+    if chatgpt_enabled and len(text.strip()) >= 20:  # Use ChatGPT for meaningful text
+        print("[INFO] Starting ChatGPT enhanced detection...")
         chatgpt_results = extract_pii_with_chatgpt(text, enabled_categories)
         print(f"[ChatGPT] Found {len(chatgpt_results)} entities")
     else:
-        print("[INFO] ChatGPT检测跳过 (未启用或文本过短)")
+        if not chatgpt_enabled:
+            print("[INFO] ChatGPT detection skipped (not enabled)")
+        else:
+            print(f"[INFO] ChatGPT detection skipped (text too short: {len(text.strip())} chars < 20)")
 
-    # --- 5. 结果合并与共识机制 ---
-    print("[INFO] 应用共识机制合并检测结果...")
-    combined_results = combine_pii_results(presidio_regex_results, ner_results, chatgpt_results)
+    # --- 5. 结果合并与共识机制 (Stage 1 Complete) ---
+    print("[INFO] Stage 1: 应用共识机制合并检测结果...")
+    stage1_results = combine_pii_results(presidio_regex_results, ner_results, chatgpt_results)
 
-    # --- 6. 去重 + 过滤非敏感词 ---
+    # --- 6. 去重 + 过滤非敏感词 (Stage 1 Filtering) ---
     seen = set()
-    filtered_results = []
-    for label, value in combined_results:
+    stage1_filtered = []
+    for label, value in stage1_results:
         clean_val = value.strip().lower()
         # 跳过空值和忽略词
         if not clean_val or clean_val in IGNORE_WORDS:
             continue
         if clean_val not in seen:
             seen.add(clean_val)
-            filtered_results.append((label, value.strip()))  # 保留原始大小写
+            stage1_filtered.append((label, value.strip()))  # 保留原始大小写
 
-    print(f"[FINAL] 最终检测到 {len(filtered_results)} 个PII项")
-    return filtered_results
+    print(f"[STAGE-1] 初步检测到 {len(stage1_filtered)} 个PII候选项")
+
+    # --- 7. Stage 2: ChatGPT Contextual Validation (ADDITIVE, not filtering) ---
+    if len(stage1_filtered) > 0 and len(text.strip()) >= 100:  # Only for substantial documents
+        print("[INFO] Stage 2: Starting ChatGPT contextual validation...")
+        chatgpt_validated = validate_pii_with_chatgpt_context(text, stage1_filtered, enabled_categories)
+
+        # Calculate filtering statistics for logging
+        filtered_count = len(stage1_filtered) - len(chatgpt_validated)
+        if filtered_count > 0:
+            print(f"[STAGE-2] ChatGPT validation: {len(chatgpt_validated)}/{len(stage1_filtered)} items passed validation")
+        else:
+            print(f"[STAGE-2] ChatGPT validation: All candidates passed validation")
+
+        # IMPORTANT: Use ALL Stage 1 results, not just ChatGPT-validated ones
+        # This ensures comprehensive PII protection while benefiting from ChatGPT's accuracy insights
+        final_results = stage1_filtered
+        print(f"[STAGE-2] Retaining all Stage 1 detection results to ensure comprehensive protection")
+    else:
+        print("[INFO] Stage 2: Skipping contextual validation (document too short or no candidates)")
+        final_results = stage1_filtered
+
+    print(f"[FINAL] Finally detected {len(final_results)} PII items")
+    return final_results

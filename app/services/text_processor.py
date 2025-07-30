@@ -106,14 +106,14 @@ def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categ
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         full_content = f.read()
 
-    print(f"[INFO] 开始提取PII，启用类别: {enabled_pii_categories}")
-    # 2. 一次性提取所有PII（NER + 规则，支持选择性过滤）
+    print(f"[INFO] Starting PII extraction, enabled categories: {enabled_pii_categories}")
+    # 2. Extract all PII at once (NER + rules, with selective filtering)
     pii_list = extract_all_pii(full_content, enabled_pii_categories)
 
-    # 注意：字典匹配现在已经集成到extract_all_pii中，不需要单独调用
+    # Note: Dictionary matching is now integrated into extract_all_pii, no need to call separately
     all_pii_list = pii_list
-    
-    print(f"[INFO] 总共找到 {len(all_pii_list)} 个PII项")
+
+    print(f"[INFO] Total found {len(all_pii_list)} PII items")
     
     # 4. 创建加密映射 - 使用哈希来创建唯一标签
     pii_mapping = {}
@@ -136,7 +136,7 @@ def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categ
                     "masked": unique_tag
                 })
             except Exception as e:
-                print(f"[ERROR] 加密失败 '{value}': {e}")
+                print(f"[ERROR] Failed to encrypt '{value}': {e}")
 
     # 5. 读取CSV数据进行替换
     df = pd.read_csv(file_path, dtype=str).fillna("")
@@ -145,13 +145,13 @@ def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categ
     sorted_pii_items = sorted(pii_mapping.items(), key=lambda x: len(x[0]), reverse=True)
     
     # 7. 批量替换 - 使用精确匹配避免列错位
-    print(f"[INFO] 开始替换 {len(sorted_pii_items)} 个PII项")
+    print(f"[INFO] starting masking of {len(sorted_pii_items)} PII items")
     for pii_value, pii_info in sorted_pii_items:
         # 使用精确字符串匹配而不是正则表达式，避免意外匹配
         df = df.replace(pii_value, pii_info["tag"], regex=False)
-        print(f"[DEBUG] 替换 '{pii_value}' -> '{pii_info['tag']}'")
+        print(f"[DEBUG] masking '{pii_value}' -> '{pii_info['tag']}'")
 
-    print(f"[INFO] CSV替换完成，最终形状: {df.shape}")
+    print(f"[INFO] Masking completed: {df.shape}")
 
     # 8. 保存结果
     base_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -177,11 +177,11 @@ def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_cate
     """优化的文本处理函数，支持选择性PII遮罩"""
     content = read_text_file(file_path)
 
-    print("[INFO] 开始提取PII...")
-    # 使用增强的extract_all_pii（包含NER + 规则 + 字典 + ChatGPT）
+    print("[INFO] Starting PII extraction...")
+    # Use enhanced extract_all_pii (includes NER + rules + dictionary + ChatGPT)
     all_pii_list = extract_all_pii(content, enabled_pii_categories)
 
-    print(f"[INFO] 总共找到 {len(all_pii_list)} 个PII项")
+    print(f"[INFO] Total found {len(all_pii_list)} PII items")
     
     # 创建唯一PII映射避免重复处理 - 使用哈希来创建唯一标签
     unique_pii = {}
@@ -204,7 +204,7 @@ def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_cate
                     "masked": unique_tag
                 })
             except Exception as e:
-                print(f"[ERROR] 加密失败 '{value}': {e}")
+                print(f"[ERROR] Failed to encrypt '{value}': {e}")
 
     # 按长度排序进行替换
     sorted_pii_items = sorted(unique_pii.items(), key=lambda x: len(x[0]), reverse=True)

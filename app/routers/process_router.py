@@ -114,6 +114,28 @@ async def process_task(task_id: str, request: Request):
             # Try advanced audit logging if available
             if AUDIT_ENABLED:
                 try:
+                    # Extract PII data from processing result
+                    pii_found_data = None
+                    if "error" not in result:
+                        pii_found_data = {
+                            "total_pii_found": file_pii_found,
+                            "total_pii_masked": file_pii_masked,
+                            "selectable_pii_found": {},
+                            "non_selectable_pii_found": {},
+                            "detection_methods": ["NER", "Regex", "Dictionary"],
+                            "confidence_scores": [],
+                            "file_type": ext,
+                            "processing_successful": True
+                        }
+
+                        # Add ChatGPT to detection methods if enabled
+                        try:
+                            from app.services.pii_main import chatgpt_enabled
+                            if chatgpt_enabled:
+                                pii_found_data["detection_methods"].append("ChatGPT")
+                        except:
+                            pass
+
                     with AuditService() as audit:
                         file_op_id = audit.log_file_operation(
                             session_id=session_id,
@@ -127,7 +149,8 @@ async def process_task(task_id: str, request: Request):
                             user_agent=user_agent,
                             processing_time=file_processing_time,
                             status=status,
-                            error_message=result.get("error") if "error" in result else None
+                            error_message=result.get("error") if "error" in result else None,
+                            pii_found_data=pii_found_data
                         )
                         print(f"[AUDIT] Advanced logging successful for {filename}")
                 except Exception as audit_error:

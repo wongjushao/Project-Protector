@@ -40,12 +40,12 @@ def decrypt_masked_file(masked_file_path, json_path, key_path):
             for tag, original_value in sorted_tags:
                 # 使用pandas的replace方法，确保只替换完整匹配
                 df = df.replace(tag, original_value, regex=False)
-                print(f"[DEBUG] 替换标签 '{tag}' -> '{original_value}'")
+                print(f"[DEBUG] replacing '{tag}' -> '{original_value}'")
 
             # 写入解密后的文件
             decrypted_file_path = masked_file_path.replace(".masked.csv", ".decrypted.csv")
             df.to_csv(decrypted_file_path, index=False)
-            print(f"[INFO] CSV解密完成，保存到: {decrypted_file_path}")
+            print(f"[INFO] csv decrypted: {decrypted_file_path}")
 
         # === 解密 TXT 文件 ===
         elif ext == ".txt":

@@ -44,7 +44,10 @@ class FileOperationLog(Base):
     # PII configuration
     enabled_pii_categories = Column(JSON)
     total_pii_categories = Column(Integer)
-    
+
+    # PII processing results (flexible JSON storage)
+    pii_processing_summary = Column(JSON)  # Store all PII-related data
+
     # Processing details
     processing_time_seconds = Column(Float)
     status = Column(String, nullable=False)  # success, error, in_progress

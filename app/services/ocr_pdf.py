@@ -59,17 +59,43 @@ def images_to_pdf(image_folder, output_pdf_path):
     return output_pdf_path
 
 def process_image_with_mask(image_path, reader, key_path, enabled_pii_categories=None):
-    print(f"[THREAD] 处理：{image_path}")
-    # 获取 JSON 路径：将 .key 扩展名替换为 .json
+    print(f"[THREAD] Processing: {image_path}")
+
+    # Extract page number from image path (e.g., page_1.jpg -> 1)
+    import re
+    page_match = re.search(r'page_(\d+)', os.path.basename(image_path))
+    page_number = int(page_match.group(1)) if page_match else 1
+
+    # Create individual JSON path for this page
     base_path, _ = os.path.splitext(key_path)
-    json_path = base_path + ".json"
-    return mask_sensitive_text(
+    json_path = f"{base_path}_page_{page_number}.json"
+
+    # Process the image and get the results
+    masked_image_path, page_json_path, key_file = mask_sensitive_text(
         image_path=image_path,
         key_path=key_path,
         reader=reader,
         output_json_path=json_path,
         enabled_pii_categories=enabled_pii_categories
     )
+
+    # Add page information to the JSON data
+    if os.path.exists(page_json_path):
+        import json
+        with open(page_json_path, 'r', encoding='utf-8') as f:
+            page_data = json.load(f)
+
+        # Add page number to each entry
+        for entry in page_data:
+            entry['page_number'] = page_number
+
+        # Save updated JSON with page information
+        with open(page_json_path, 'w', encoding='utf-8') as f:
+            json.dump(page_data, f, indent=2)
+
+        print(f"[SUCCESS] Added page {page_number} info to {len(page_data)} entries")
+
+    return masked_image_path, page_json_path, key_file
 
 def process_pdf_images_multithread(image_dir, reader, key_path="aes_key.key", max_workers=4, enabled_pii_categories=None):
     image_paths = [
@@ -88,6 +114,6 @@ def process_pdf_images_multithread(image_dir, reader, key_path="aes_key.key", ma
             path = futures[future]
             try:
                 future.result()
-                print(f"[SUCCESS] 页面处理完成: {os.path.basename(path)}")
+                print(f"[SUCCESS] Page processing completed: {os.path.basename(path)}")
             except Exception as e:
                 print(f"❌ 处理失败 {path}: {e}")

@@ -116,14 +116,14 @@ def load_or_generate_valid_key(key_path):
         else:
             raise ValueError("Key file does not exist")
     except Exception as e:
-        print(f"[WARN] 无效或损坏的密钥（或路径冲突）: {e}")
+        print(f"[WARN] Invalid or corrupted key (or path conflict): {e}")
         key = Fernet.generate_key()
         with open(key_path, "wb") as f:
             f.write(key)
     return key
 
 
-# === 主函数：遮罩 + 加密 ===
+# === Main Function: Masking + Encryption ===
 def mask_sensitive_text(image_path, key_path, output_json_path=None, output_image_path=None, reader=None, keywords=None, enabled_pii_categories=None):
     from easyocr import Reader
     if reader is None:
@@ -131,7 +131,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
     results = reader.readtext(image_path)
     image = cv2.imread(image_path)
     if image is None:
-        raise ValueError(f"无法读取图像（可能尚未写入完成或路径错误）: {image_path}")
+        raise ValueError(f"Unable to read image (possibly not written yet or path error): {image_path}")
     encrypted_data = []
 
     # === Step 1: 按 y 位置对文本行进行分组（模拟“行”）===
@@ -174,18 +174,18 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
         full_text_lines.append(line_text)
 
     full_text = "\n".join(full_text_lines)
-    print(f"[INFO] 完整文本：\n{full_text}\n")
+    print(f"[INFO] Full text:\n{full_text}\n")
 
     # === Step 3: 提取 PII（支持选择性类别过滤）===
     # Default to all selectable categories if none specified
     if enabled_pii_categories is None:
         enabled_pii_categories = ['NAMES', 'RACES', 'ORG_NAMES', 'STATUS', 'LOCATIONS', 'RELIGIONS']
 
-    print(f"[INFO] 启用的PII类别: {enabled_pii_categories}")
+    print(f"[INFO] Enabled PII categories: {enabled_pii_categories}")
 
-    # 使用选择性PII提取
+    # Use selective PII extraction
     pii_entries = extract_all_pii(full_text, enabled_pii_categories)
-    print(f"[INFO] 提取到 {len(pii_entries)} 个PII项（包含选择性过滤）")
+    print(f"[INFO] Extracted {len(pii_entries)} PII items (with selective filtering)")
 
     # ✅ 业务级忽略词（只在图像遮罩场景中忽略）
     # Note: Using exact word matching to avoid false positives
@@ -207,6 +207,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
         "bank", "account", "account type", "account no", "account number",
         "bank account", "bank name", "bank statement", "statement",
         "account holder", "account holder name",
+        "public bank", "maybank", "cimb", "hsbc", "standard chartered", "uob", "ocbc",
 
         # Common short words that cause false positives (removed)
         # Removed: "id", "no", "my", "k", "your" - too generic and cause false matches
@@ -223,7 +224,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
     filtered_pii = []
     selectable_categories = ['NAMES', 'RACES', 'ORG_NAMES', 'STATUS', 'LOCATIONS', 'RELIGIONS']
 
-    print("[INFO] 处理PII检测结果：")
+    print("[INFO] Processing PII detection results:")
     for label, value in pii_entries:
         clean_val = value.strip().lower()
         original_val = value.strip()
@@ -234,24 +235,24 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
 
         # 忽略通用非敏感词 (使用精确词匹配，避免误判)
         if _should_ignore_word(clean_val, IGNORE_WORDS):
-            print(f"[SKIP] 忽略非敏感词: {original_val}")
+            print(f"[SKIP] Ignoring non-sensitive word: {original_val}")
             continue
 
         # 选择性PII类别：只有在enabled_categories中的才会被遮罩
         if label in selectable_categories:
             if label in enabled_pii_categories:
                 filtered_pii.append((label, original_val))
-                print(f"[MASK] 选择性PII - {label}: {original_val}")
+                print(f"[MASK] Selective PII - {label}: {original_val}")
             else:
-                print(f"[SKIP] 选择性PII未启用 - {label}: {original_val}")
+                print(f"[SKIP] Selective PII not enabled - {label}: {original_val}")
         else:
-            # 非选择性PII（如IC、EMAIL、PHONE等）：始终遮罩
+            # Non-selective PII (like IC, EMAIL, PHONE, etc.): always mask
             filtered_pii.append((label, original_val))
-            print(f"[MASK] 非选择性PII - {label}: {original_val}")
+            print(f"[MASK] Non-selective PII - {label}: {original_val}")
 
     # 更新 keywords
     keywords = list(set(value for _, value in filtered_pii))
-    print(f"[INFO] 最终将遮罩 {len(keywords)} 个关键词")
+    print(f"[INFO] Will finally mask {len(keywords)} keywords")
 
     # === Step 4: 加载或生成密钥 ===
     key = load_or_generate_valid_key(key_path)
@@ -277,7 +278,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
 
         # 检查是否应该忽略此文本（在遮罩前检查）
         if _should_ignore_word(text, IGNORE_WORDS):
-            print(f"[SKIP] 忽略非敏感词（OCR阶段）: {text}")
+            print(f"[SKIP] Ignoring non-sensitive word (OCR stage): {text}")
             continue
 
         # 去重：使用 IOU 判断是否已处理
@@ -299,7 +300,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
 
         success, roi_encoded = cv2.imencode('.png', roi)
         if not success:
-            print(f"[WARN] 区域编码失败，跳过: {text}")
+            print(f"[WARN] Region encoding failed, skipping: {text}")
             continue
 
         roi_base64 = base64.b64encode(roi_encoded).decode('utf-8')
@@ -319,20 +320,20 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
         name, ext = os.path.splitext(image_path)
         output_image_path = f"{name}_masked{ext}"
     cv2.imwrite(output_image_path, image)
-    print(f"✅ 遮罩图像保存至：{output_image_path}")
+    print(f"✅ Masked image saved to: {output_image_path}")
 
     json_path = output_json_path or output_image_path.replace(ext, ".json")
     with open(json_path, "w", encoding='utf-8') as f:
         json.dump(encrypted_data, f, indent=2)
-    print(f"✅ 加密数据保存至：{json_path}")
+    print(f"✅ Encrypted data saved to: {json_path}")
 
-    # === 输出处理摘要 ===
-    print(f"\n📊 图像处理摘要:")
-    print(f"   - 启用PII类别: {enabled_pii_categories}")
-    print(f"   - 检测到PII项: {len(pii_entries)}")
-    print(f"   - 实际遮罩项: {len(encrypted_data)}")
-    print(f"   - 遮罩图像: {output_image_path}")
-    print(f"   - 加密数据: {json_path}")
-    print(f"   - 密钥文件: {key_path}")
+    # === Output processing summary ===
+    print(f"\n📊 Image processing summary:")
+    print(f"   - Enabled PII categories: {enabled_pii_categories}")
+    print(f"   - Detected PII items: {len(pii_entries)}")
+    print(f"   - Actually masked items: {len(encrypted_data)}")
+    print(f"   - Masked image: {output_image_path}")
+    print(f"   - Encrypted data: {json_path}")
+    print(f"   - Key file: {key_path}")
 
     return output_image_path, json_path, key_path

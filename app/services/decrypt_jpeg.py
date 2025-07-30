@@ -9,7 +9,7 @@ def decrypt_masked_image_to_bytes(masked_image_path: str, json_path: str, key_pa
     # 加载图像
     image = cv2.imread(masked_image_path)
     if image is None:
-        raise ValueError("无法读取图像")
+        raise ValueError("Unable to read image (possibly not written yet or path error): {masked_image_path}")
 
     # 加载密钥
     with open(key_path, "rb") as f:
@@ -20,7 +20,7 @@ def decrypt_masked_image_to_bytes(masked_image_path: str, json_path: str, key_pa
     with open(json_path, "r", encoding="utf-8") as f:
         encrypted_data = json.load(f)
 
-    print(f"开始解密 {len(encrypted_data)} 个区域")
+    print(f"starting decryption of {len(encrypted_data)} encrypted regions")
 
     # 解密并替换图像区域
     for i, entry in enumerate(encrypted_data):
@@ -101,16 +101,16 @@ def decrypt_masked_image_to_bytes(masked_image_path: str, json_path: str, key_pa
                             # 直接替换原区域
                             image[y_min:y_max, x_min:x_max] = roi_resized
 
-                        print(f"区域 {i+1} 解密成功 (扩展区域: {exp_w}x{exp_h})")
+                        print(f"region {i+1} decrypted (expanded area: {exp_w}x{exp_h})")
                     else:
-                        print(f"区域 {i+1} 坐标无效，跳过")
+                        print(f"region {i+1} failed: invalid coordinates")
                 else:
-                    print(f"区域 {i+1} ROI解码失败，跳过")
+                    print(f"region {i+1} ROI decoding failed, skipping")
             else:
-                print(f"区域 {i+1} 缺少原始图像数据，跳过")
+                print(f"region {i+1} missing original image data, skipping")
 
         except Exception as e:
-            print(f"处理区域 {i+1} 时出错: {e}")
+            print(f"decryption of region {i+1} failed: {e}")
             continue
 
     # 后处理：清理可能残留的黑色像素
@@ -118,7 +118,7 @@ def decrypt_masked_image_to_bytes(masked_image_path: str, json_path: str, key_pa
 
     # 调试：保存解密后的图像
     cv2.imwrite("/tmp/debug_decrypted_result.png", image)
-    print("解密结果已保存到 /tmp/debug_decrypted_result.png")
+    print("decrypted image saved to /tmp/debug_decrypted_result.png")
 
     # 将图像编码为字节流
     _, buffer = cv2.imencode('.png', image)
@@ -163,10 +163,10 @@ def post_process_decrypted_image(image, encrypted_data):
                     if np.sum(inpaint_mask) > 0:  # 确保有需要修复的像素
                         repaired_region = cv2.inpaint(region, inpaint_mask, 3, cv2.INPAINT_TELEA)
                         processed_image[y_min:y_max, x_min:x_max] = repaired_region
-                        print(f"区域 {i+1} 后处理完成，修复了 {np.sum(black_mask)} 个黑色像素")
+                        print(f"region {i+1} post-processed, fixed {np.sum(black_mask)} black pixels")
 
         except Exception as e:
-            print(f"后处理区域 {i+1} 时出错: {e}")
+            print(f"post-processing of region {i+1} failed: {e}")
             continue
 
     return processed_image
