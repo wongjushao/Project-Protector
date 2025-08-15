@@ -48,40 +48,40 @@ def _should_ignore_word(text, ignore_words):
 
 def mask_region_improved(image, x_min, y_min, x_max, y_max):
     """
-    改进的遮罩方法，使用渐变边缘减少硬边缘效应
+    Improved masking method using gradient edges to reduce hard edge effects
     """
-    # 创建基本的黑色矩形遮罩
+    # Create a basic black rectangular mask
     cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (0, 0, 0), -1)
 
-    # 可选：添加轻微的模糊边缘来减少锐利边缘
-    # 这有助于在解密时更好地融合
+    # Add a slight edge blur to reduce sharp edges
+    # This helps with better blending during decryption
     border_width = 1
     if border_width > 0:
-        # 在遮罩区域周围添加轻微的模糊
+        # Adds a slight blur around the masked area
         x_start = max(0, x_min - border_width)
         y_start = max(0, y_min - border_width)
         x_end = min(image.shape[1], x_max + border_width)
         y_end = min(image.shape[0], y_max + border_width)
 
-        # 获取边界区域
+        # Get the bounding area
         border_region = image[y_start:y_end, x_start:x_end].copy()
 
-        # 对边界区域应用轻微模糊
+        # Apply a slight blur to the boundary areas
         if border_region.size > 0:
             blurred = cv2.GaussianBlur(border_region, (3, 3), 0.5)
             image[y_start:y_end, x_start:x_end] = blurred
 
-            # 重新绘制核心黑色区域
+            # Repaint the core black area
             cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (0, 0, 0), -1)
 
-# === 加密/解密 ===
+# === Encryption/Decryption ===
 def generate_key():
     return Fernet.generate_key()
 
 def encrypt_text(text, fernet):
     return fernet.encrypt(text.encode()).decode()
 
-# === bbox IOU 判定（去重用）===
+# === bbox IOU determination (remove reuse) ===
 def iou(bbox1, bbox2):
     x1_min = min(p[0] for p in bbox1)
     x1_max = max(p[0] for p in bbox1)
@@ -112,7 +112,7 @@ def load_or_generate_valid_key(key_path):
         if os.path.exists(key_path):
             with open(key_path, "rb") as f:
                 key = f.read()
-            Fernet(key)  # 验证是否是有效密钥
+            Fernet(key)
         else:
             raise ValueError("Key file does not exist")
     except Exception as e:
@@ -130,11 +130,11 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
         reader = Reader(['en', 'ms'], gpu=True)
     results = reader.readtext(image_path)
     image = cv2.imread(image_path)
-    if image is None:
+    if image is None: 
         raise ValueError(f"Unable to read image (possibly not written yet or path error): {image_path}")
     encrypted_data = []
-
-    # === Step 1: 按 y 位置对文本行进行分组（模拟“行”）===
+ 
+    # === Step 1: Group text lines by y position (simulating "rows") ===
     lines = []
     for bbox, text, confidence in results:
         y_coords = [point[1] for point in bbox]
@@ -146,11 +146,11 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
             'center_y': center_y
         })
 
-    # 排序并分组为“行”
+    # Sort and group into "rows"
     lines.sort(key=lambda x: x['center_y'])
     grouped_lines = []
     current_group = []
-    threshold = 25  # 行间距阈值（可根据图像分辨率调整）
+    threshold = 25  # Line spacing threshold (adjustable based on image resolution)
 
     for line in lines:
         if not current_group:
@@ -165,10 +165,10 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
     if current_group:
         grouped_lines.append(current_group)
 
-    # === Step 2: 构造每行的完整文本 ===
+    # === Step 2: Construct the complete text of each line ===
     full_text_lines = []
     for group in grouped_lines:
-        # 按 x 排序一行内的文本
+        # Sort text within a line by x
         group_sorted = sorted(group, key=lambda x: min(p[0] for p in x['bbox']))
         line_text = " ".join(item['text'] for item in group_sorted)
         full_text_lines.append(line_text)
@@ -176,7 +176,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
     full_text = "\n".join(full_text_lines)
     print(f"[INFO] Full text:\n{full_text}\n")
 
-    # === Step 3: 提取 PII（支持选择性类别过滤）===
+    # === Step 3: Extract PII (supports selective category filtering) ===
     # Default to all selectable categories if none specified
     if enabled_pii_categories is None:
         enabled_pii_categories = ['NAMES', 'RACES', 'ORG_NAMES', 'STATUS', 'LOCATIONS', 'RELIGIONS']
@@ -187,7 +187,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
     pii_entries = extract_all_pii(full_text, enabled_pii_categories)
     print(f"[INFO] Extracted {len(pii_entries)} PII items (with selective filtering)")
 
-    # ✅ 业务级忽略词（只在图像遮罩场景中忽略）
+    # ✅ Business-level ignored words (ignored only in image mask scenarios)
     # Note: Using exact word matching to avoid false positives
     IGNORE_WORDS = {
         # Document artifacts and watermarks
@@ -216,7 +216,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
         "bank statement example", "four bank", "specimen copy"
     }
 
-    # ✅ 马来西亚地点白名单（用于 LOC 过滤）
+    # ✅ Malaysia location whitelist (for LOC filtering)
     MALAYSIA_LOCATIONS = {
     }
 
@@ -228,17 +228,14 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
     for label, value in pii_entries:
         clean_val = value.strip().lower()
         original_val = value.strip()
-
-        # 跳过空值
+        # Skipping null values
         if not original_val:
             continue
-
-        # 忽略通用非敏感词 (使用精确词匹配，避免误判)
+        # Ignore common non-sensitive words (use exact word matching to avoid misjudgment)
         if _should_ignore_word(clean_val, IGNORE_WORDS):
             print(f"[SKIP] Ignoring non-sensitive word: {original_val}")
             continue
-
-        # 选择性PII类别：只有在enabled_categories中的才会被遮罩
+        # Selective PII categories: Only those in enabled_categories will be masked
         if label in selectable_categories:
             if label in enabled_pii_categories:
                 filtered_pii.append((label, original_val))
@@ -249,39 +246,35 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
             # Non-selective PII (like IC, EMAIL, PHONE, etc.): always mask
             filtered_pii.append((label, original_val))
             print(f"[MASK] Non-selective PII - {label}: {original_val}")
-
-    # 更新 keywords
+    # Update keywords
     keywords = list(set(value for _, value in filtered_pii))
     print(f"[INFO] Will finally mask {len(keywords)} keywords")
-
-    # === Step 4: 加载或生成密钥 ===
+    # === Step 4: Load or generate a key ===
     key = load_or_generate_valid_key(key_path)
     fernet = Fernet(key)
-
     seen = []
-
-    # === Step 5: 遍历原始 OCR 结果，匹配关键词（支持跨行关键词）===
+    # === Step 5: Traverse the original OCR results and match keywords (support cross-line keywords) ===
     for bbox, text, confidence in results:
         matched = False
         for keyword in keywords:
-            # 检查关键词是否“跨行”，但当前行包含其一部分
+            # Checks if a keyword "spreads across lines" but the current line contains part of it
             if keyword.lower() in text.lower():
                 matched = True
                 break
-            # 或者：当前文本是关键词的子串（前缀/后缀），且附近有另一部分？
+            # Or: Is the current text a substring (prefix/suffix) of the keyword, and is there another part nearby?
             if (keyword.lower().startswith(text.lower()) or keyword.lower().endswith(text.lower())) and len(text) > 3:
-                # 启用“跨行合并检测”（进阶可做，这里先简单处理）
-                pass  # 可扩展：搜索邻近框拼接
+                # Enable "cross-row merge detection" (advanced option available, but simple processing is provided here)
+                pass  # Scalable: Search neighboring box stitching
 
         if not matched:
             continue
 
-        # 检查是否应该忽略此文本（在遮罩前检查）
+        # Checks if this text should be ignored (checked before masking)
         if _should_ignore_word(text, IGNORE_WORDS):
             print(f"[SKIP] Ignoring non-sensitive word (OCR stage): {text}")
             continue
 
-        # 去重：使用 IOU 判断是否已处理
+        # Deduplication: Use IOU to determine whether it has been processed
         duplicate = False
         for s in seen:
             if iou(bbox, s["bbox"]) > 0.85 and text.lower() == s["text"].lower():
@@ -291,7 +284,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
             continue
         seen.append({"bbox": bbox, "text": text})
 
-        # === 遮罩 + 加密 ===
+        # === Masking + Encryption ===
         x_coords = [int(p[0]) for p in bbox]
         y_coords = [int(p[1]) for p in bbox]
         x_min, x_max = min(x_coords), max(x_coords)
@@ -304,7 +297,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
             continue
 
         roi_base64 = base64.b64encode(roi_encoded).decode('utf-8')
-        # 使用改进的遮罩方法，避免硬边缘
+        # Use improved masking methods to avoid hard edges
         mask_region_improved(image, x_min, y_min, x_max, y_max)
         cipher = encrypt_text(text, fernet)
         encrypted_data.append({
@@ -315,7 +308,7 @@ def mask_sensitive_text(image_path, key_path, output_json_path=None, output_imag
         })
         print(f"[MASKED + ENCRYPTED] '{text}' -> {cipher[:12]}...")
 
-    # === 保存图像和 JSON ===
+    # === Saving images and JSON ===
     if output_image_path is None:
         name, ext = os.path.splitext(image_path)
         output_image_path = f"{name}_masked{ext}"

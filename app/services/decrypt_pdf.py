@@ -85,7 +85,7 @@ def decrypt_masked_pdf(masked_pdf_path: str, json_path: str, key_path: str):
             # Use original page if decryption fails
             decrypted_images.append(page.convert("RGB"))
 
-    # Step 5: 合并解密后的PDF
+    # Step 5: Merge decrypted PDFs
     output_pdf = os.path.splitext(masked_pdf_path)[0] + ".decrypted.pdf"
     if decrypted_images:
         decrypted_images[0].save(output_pdf, save_all=True, append_images=decrypted_images[1:])

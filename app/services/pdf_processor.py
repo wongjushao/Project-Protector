@@ -89,12 +89,12 @@ def run_pdf_processing(pdf_path: str, enabled_pii_categories=None):
             "total_encrypted_items": len(combined_json_data)
         }
 
-        print(f"[SUCCESS] PDF处理完成: {len(image_paths)} 页已处理")
+        print(f"[SUCCESS] PDF processing completed: {len(image_paths)} pages processed")
         return result
 
     except Exception as e:
-        print(f"[ERROR] PDF处理失败: {e}")
+        print(f"[ERROR] PDF processing failed: {e}")
         return {
             "status": "error",
-            "message": f"PDF处理失败: {str(e)}"
+            "message": f"PDF processing failed: {str(e)}"
         }

@@ -7,34 +7,33 @@ import pandas as pd
 import re
 from cryptography.fernet import Fernet
 from app.services.pii_main import extract_all_pii
-# 导入字典
+# Importing a dictionary
 from app.resources.dictionaries import NAMES, ORG_NAMES, RACES, STATUS, LOCATIONS, RELIGIONS
 
-# === Fernet 加密相关 ===
+# === Fernet encryption related ===
 def generate_fernet_key():
     return Fernet.generate_key()
 
 def encrypt_fernet(text, fernet: Fernet):
     return fernet.encrypt(text.encode()).decode()
 
-# === 字典匹配函数 ===
+# === Dictionary matching function ===
 def extract_from_dictionaries(text):
-    """从字典中提取PII"""
     results = []
     
-    # 预处理文本
+    # Preprocessing text
     text_lower = text.lower()
     
-    # 匹配姓名
+    # Matching Names
     for name in NAMES:
         if name.lower() in text_lower:
-            # 使用正则表达式确保是完整单词匹配
+            # Use regular expressions to ensure full word matches
             pattern = r'\b' + re.escape(name) + r'\b'
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
                 results.append(("Name", match))
     
-    # 匹配组织名称
+    # Matching Organisaion name
     for org in ORG_NAMES:
         if org.lower() in text_lower:
             pattern = r'\b' + re.escape(org) + r'\b'
@@ -42,7 +41,7 @@ def extract_from_dictionaries(text):
             for match in matches:
                 results.append(("ORG", match))
     
-    # 匹配种族
+    # Matching Races
     for race in RACES:
         if race.lower() in text_lower:
             pattern = r'\b' + re.escape(race) + r'\b'
@@ -50,7 +49,7 @@ def extract_from_dictionaries(text):
             for match in matches:
                 results.append(("Race", match))
     
-    # 匹配状态
+    # Matching Status
     for status in STATUS:
         if status.lower() in text_lower:
             pattern = r'\b' + re.escape(status) + r'\b'
@@ -58,7 +57,7 @@ def extract_from_dictionaries(text):
             for match in matches:
                 results.append(("Status", match))
     
-    # 匹配地点
+    # Matching Locations
     for location in LOCATIONS:
         if location.lower() in text_lower:
             pattern = r'\b' + re.escape(location) + r'\b'
@@ -74,7 +73,7 @@ def extract_from_dictionaries(text):
                 results.append(("Religion", match))
     return results
 
-# === 文本读取 ===
+# === Text reading ===
 def read_text_file(file_path):
     ext = os.path.splitext(file_path)[1].lower()
     if ext in [".txt", ".csv"]:
@@ -82,7 +81,7 @@ def read_text_file(file_path):
             return f.read()
     return ""
 
-# === 优化的主函数 ===
+# === Optimized main function ===
 def run_text_processing(file_path: str, enabled_pii_categories=None, key_str: str = None):
     try:
         ext = os.path.splitext(file_path)[1].lower()
@@ -101,8 +100,8 @@ def run_text_processing(file_path: str, enabled_pii_categories=None, key_str: st
         }
 
 def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categories=None):
-    """优化的CSV处理函数，支持选择性PII遮罩"""
-    # 1. 读取整个CSV为文本进行PII识别
+    """Optimized CSV processing functions, supporting selective PII masking"""
+    # 1. Read the entire CSV as text for PII identification
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         full_content = f.read()
 
@@ -115,16 +114,16 @@ def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categ
 
     print(f"[INFO] Total found {len(all_pii_list)} PII items")
     
-    # 4. 创建加密映射 - 使用哈希来创建唯一标签
+    # 4. Creating a Crypto Map - Using Hashing to Create Unique Labels
     pii_mapping = {}
     mapping = []
     
     for label, value in all_pii_list:
-        if value not in pii_mapping:  # 避免重复加密
+        if value not in pii_mapping:
             try:
                 enc = encrypt_fernet(value, fernet)
                 
-                # 使用值的哈希创建唯一标签，确保相同值总是得到相同标签
+                # Use a hash of the value to create a unique label, ensuring that the same value always gets the same label
                 value_hash = hashlib.md5(value.encode()).hexdigest()[:8]
                 unique_tag = f"[ENC:{label}_{value_hash}]"
                 
@@ -138,22 +137,22 @@ def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categ
             except Exception as e:
                 print(f"[ERROR] Failed to encrypt '{value}': {e}")
 
-    # 5. 读取CSV数据进行替换
+    # 5. Read CSV data for replacement
     df = pd.read_csv(file_path, dtype=str).fillna("")
     
-    # 6. 按长度排序进行替换（避免部分替换）
+    # 6. Sort replacements by length (avoiding partial replacements)
     sorted_pii_items = sorted(pii_mapping.items(), key=lambda x: len(x[0]), reverse=True)
     
-    # 7. 批量替换 - 使用精确匹配避免列错位
+    # 7. Batch Replace - Use exact match to avoid column misalignment
     print(f"[INFO] starting masking of {len(sorted_pii_items)} PII items")
     for pii_value, pii_info in sorted_pii_items:
-        # 使用精确字符串匹配而不是正则表达式，避免意外匹配
+        # Use exact string matching instead of regular expressions to avoid accidental matches
         df = df.replace(pii_value, pii_info["tag"], regex=False)
         print(f"[DEBUG] masking '{pii_value}' -> '{pii_info['tag']}'")
 
     print(f"[INFO] Masking completed: {df.shape}")
 
-    # 8. 保存结果
+    # 8. save result
     base_name = os.path.splitext(os.path.basename(file_path))[0]
     output_dir = os.path.dirname(file_path)
     masked_csv_path = os.path.join(output_dir, base_name + ".masked.csv")
@@ -174,7 +173,7 @@ def process_csv_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categ
     }
 
 def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_categories=None):
-    """优化的文本处理函数，支持选择性PII遮罩"""
+    """Optimized text processing functions, supporting selective PII masking"""
     content = read_text_file(file_path)
 
     print("[INFO] Starting PII extraction...")
@@ -183,7 +182,7 @@ def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_cate
 
     print(f"[INFO] Total found {len(all_pii_list)} PII items")
     
-    # 创建唯一PII映射避免重复处理 - 使用哈希来创建唯一标签
+    # Create unique PII mappings to avoid duplicate processing - use hashing to create unique tags
     unique_pii = {}
     mapping = []
     
@@ -192,7 +191,7 @@ def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_cate
             try:
                 enc = encrypt_fernet(value, fernet)
                 
-                # 使用值的哈希创建唯一标签，确保相同值总是得到相同标签
+                # Use a hash of the value to create a unique label, ensuring that the same value always gets the same label
                 value_hash = hashlib.md5(value.encode()).hexdigest()[:8]
                 unique_tag = f"[ENC:{label}_{value_hash}]"
                 
@@ -206,15 +205,31 @@ def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_cate
             except Exception as e:
                 print(f"[ERROR] Failed to encrypt '{value}': {e}")
 
-    # 按长度排序进行替换
+    # Replace by length
     sorted_pii_items = sorted(unique_pii.items(), key=lambda x: len(x[0]), reverse=True)
-    
+
     masked_text = content
     for pii_value, pii_info in sorted_pii_items:
-        escaped_pii = re.escape(pii_value)
-        masked_text = re.sub(escaped_pii, pii_info["tag"], masked_text)
+        # Use a safer replacement method that avoids nested encryption tags
+        # Split text by existing encryption tags and only replace in non-encrypted parts
+        parts = re.split(r'(\[ENC:[^\]]+\])', masked_text)
 
-    # 保存结果
+        for i in range(len(parts)):
+            # Only replace in parts that are not encryption tags (odd indices are tags)
+            if i % 2 == 0 and not parts[i].startswith('[ENC:'):
+                escaped_pii = re.escape(pii_value)
+                # Use word boundaries to ensure we match complete words when possible
+                # For single characters or numbers, be more careful
+                if len(pii_value) == 1 and pii_value.isdigit():
+                    # For single digits, use word boundaries to avoid partial matches
+                    pattern = r'\b' + escaped_pii + r'\b'
+                else:
+                    pattern = escaped_pii
+                parts[i] = re.sub(pattern, pii_info["tag"], parts[i])
+
+        masked_text = ''.join(parts)
+
+    # save result
     base_name = os.path.splitext(os.path.basename(file_path))[0]
     output_dir = os.path.dirname(file_path)
     masked_file_path = os.path.join(output_dir, base_name + ".masked.txt")

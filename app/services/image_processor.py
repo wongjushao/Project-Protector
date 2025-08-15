@@ -20,9 +20,9 @@ def run_ocr_jpeg(image_path: str, enabled_pii_categories=None):
 
         print(f"[INFO] Processing image with enabled PII categories: {enabled_pii_categories}")
 
-        # 生成一个单独的 .key 文件路径
+        # Generate a separate .key file path
         name, _ = os.path.splitext(image_path)
-        key_path = f"{name}.key"  # 不覆盖原图
+        key_path = f"{name}.key"  # Do not overwrite the original image
 
         masked_img, json_path, key_file = mask_sensitive_text(
             image_path=image_path,

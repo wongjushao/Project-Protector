@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Any
 from app.resources.dictionaries import NAMES, ORG_NAMES, RACES, STATUS, LOCATIONS, RELIGIONS
 
-# === 延迟加载模型 ===
+# === Delay loading models ===
 ner_pipeline = None
 model_loaded = False
 
@@ -28,7 +28,7 @@ def load_model():
                 model=model,
                 tokenizer=tokenizer,
                 framework="tf",
-                aggregation_strategy=None  # 细粒度输出
+                aggregation_strategy=None
             )
             model_loaded = True
             print("✅ ML model loaded successfully")
@@ -60,13 +60,11 @@ def load_chatgpt_client():
             print("[WARN] OpenAI library not installed. Install with: pip install openai")
             print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
             return False
-
         # Initialize client
         chatgpt_client = OpenAI(api_key=api_key)
         chatgpt_enabled = True
         print("✅ ChatGPT API client initialized successfully")
         return True
-
     except Exception as e:
         print(f"[WARN] Failed to initialize ChatGPT client: {e}")
         print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
@@ -340,17 +338,13 @@ Focus on protecting individual privacy while removing corporate/institutional in
             max_tokens=1500,
             temperature=0.1
         )
-
         response_text = response.choices[0].message.content.strip()
-
         # Extract JSON from response
         json_start = response_text.find('[')
         json_end = response_text.rfind(']') + 1
-
         if json_start >= 0 and json_end > json_start:
             json_text = response_text[json_start:json_end]
             validated_data = json.loads(json_text)
-
             # Convert back to our format
             validated_results = []
             for item in validated_data:
@@ -358,7 +352,6 @@ Focus on protecting individual privacy while removing corporate/institutional in
                     label = item['label']
                     value = item['value'].strip()
                     reason = item.get('reason', 'Validated by ChatGPT')
-
                     if value:
                         validated_results.append((label, value))
                         print(f"[ChatGPT-VALIDATION] KEEP: {label} = '{value}' ({reason})")
@@ -393,12 +386,10 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
                        chatgpt_results: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """
     Combine results from multiple PII detection methods using enhanced consensus mechanism
-
     Args:
         presidio_results: Results from Presidio/regex detection
         ner_results: Results from NER model (may be empty if failed)
         chatgpt_results: Results from ChatGPT
-
     Returns:
         Combined and deduplicated results
     """
@@ -410,16 +401,12 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
         methods_used.append("NER")
     if chatgpt_results:
         methods_used.append("ChatGPT")
-
     print(f"[CONSENSUS] Active detection methods: {', '.join(methods_used)}")
-
     # Combine all results
     all_results = presidio_results + ner_results + chatgpt_results
-
     if not all_results:
         print("[CONSENSUS] No PII detected by any method")
         return []
-
     # Group by normalized value for deduplication
     value_groups = {}
     for label, value in all_results:
@@ -427,7 +414,6 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
         if normalized_value not in value_groups:
             value_groups[normalized_value] = []
         value_groups[normalized_value].append((label, value))
-
     # Apply enhanced consensus logic
     final_results = []
     for normalized_value, candidates in value_groups.items():
@@ -440,13 +426,11 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
             # Priority: ChatGPT > Presidio/Regex > NER for conflicting labels
             label_votes = {}
             label_sources = {}
-
             for label, value in candidates:
                 if label not in label_votes:
                     label_votes[label] = 0
                     label_sources[label] = []
                 label_votes[label] += 1
-
                 # Determine source method (approximate)
                 if (label, value) in chatgpt_results:
                     label_sources[label].append("ChatGPT")
@@ -454,11 +438,9 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
                     label_sources[label].append("Presidio")
                 else:
                     label_sources[label].append("NER")
-
             # Choose best label with priority weighting
             best_label = None
             best_score = 0
-
             for label, votes in label_votes.items():
                 score = votes
                 # Boost score based on source reliability
@@ -466,11 +448,9 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
                     score += 2  # ChatGPT gets priority for context awareness
                 if "Presidio" in label_sources[label]:
                     score += 1  # Regex patterns are reliable
-
                 if score > best_score:
                     best_score = score
                     best_label = label
-
             # Get the best value (prefer original case)
             best_value = next(value for label, value in candidates if label == best_label)
             final_results.append((best_label, best_value))
@@ -478,26 +458,26 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
     print(f"[CONSENSUS] Combined {len(all_results)} detections into {len(final_results)} final results")
     return final_results
 
-# === 通用忽略词（非敏感，不需加密）===
+# === General ignored words (non-sensitive, no encryption required) ===
 IGNORE_WORDS = {
     "malaysia", "mykad", "identity", "card", "kad", "pengenalan",
     "warganegara", "lelaki", "perempuan", "bujang", "kawin",
     "lel", "per", "male", "female", "citizen", "not citizen"
 }
 
-# === 增强的正则提取器 ===
+# === Enhanced regular expression extractor ===
 def extract_ic(text):
-    """提取马来西亚身份证号码"""
+    """Extract Malaysian Identity Card Number"""
     patterns = [
-        r"\b\d{6}-\d{2}-\d{4}\b",  # 标准格式: 123456-78-9012
-        r"\b\d{12}\b",             # 无连字符: 123456789012
-        r"\b\d{6}\s\d{2}\s\d{4}\b" # 空格分隔: 123456 78 9012
+        r"\b\d{6}-\d{2}-\d{4}\b", 
+        r"\b\d{12}\b",            
+        r"\b\d{6}\s\d{2}\s\d{4}\b"
     ]
     matches = []
     for pattern in patterns:
         matches.extend(re.findall(pattern, text))
 
-    # 验证IC号码格式
+    # Verify IC number format
     validated_matches = []
     for match in matches:
         clean_ic = re.sub(r'[-\s]', '', match)
@@ -507,12 +487,12 @@ def extract_ic(text):
     return validated_matches
 
 def extract_email(text):
-    """提取电子邮件地址"""
+    """Extract email addresses"""
     pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
     return re.findall(pattern, text)
 
 def extract_dob(text):
-    """提取出生日期"""
+    """Extract date of birth"""
     patterns = [
         r"\b\d{1,2}/\d{1,2}/\d{4}\b",      # DD/MM/YYYY or D/M/YYYY
         r"\b\d{1,2}-\d{1,2}-\d{4}\b",      # DD-MM-YYYY
@@ -525,15 +505,15 @@ def extract_dob(text):
     return matches
 
 def extract_bank_account(text):
-    """提取银行账户号码"""
+    """Retrieve bank account number"""
     patterns = [
-        r"\b\d{10,16}\b",                  # 基本账户号码
-        r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4,8}\b", # 分段格式
+        r"\b\d{10,16}\b",                 
+        r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4,8}\b",
     ]
     matches = []
     for pattern in patterns:
         found = re.findall(pattern, text)
-        # 过滤掉可能是电话号码或其他数字的匹配
+        # Filter out matches that might be phone numbers or other numbers
         for match in found:
             clean_num = re.sub(r'[-\s]', '', match)
             if 10 <= len(clean_num) <= 16 and not is_phone_number(clean_num):
@@ -541,13 +521,13 @@ def extract_bank_account(text):
     return matches
 
 def extract_phone(text):
-    """提取电话号码（马来西亚格式）"""
+    """Extract phone number (Malaysian format)"""
     patterns = [
-        r'\+60\d{1,2}[-\s]?\d{7,8}',       # 国际格式: +60123456789
-        r'\b01\d[-\s]?\d{7,8}\b',          # 手机: 0123456789
-        r'\b03[-\s]?\d{8}\b',              # 固话KL: 0312345678
-        r'\b0[4-9]\d[-\s]?\d{7}\b',        # 其他州固话
-        r'\b\d{3}[-\s]?\d{7,8}\b',         # 简化格式
+        r'\+60\d{1,2}[-\s]?\d{7,8}',       
+        r'\b01\d[-\s]?\d{7,8}\b',          
+        r'\b03[-\s]?\d{8}\b',              
+        r'\b0[4-9]\d[-\s]?\d{7}\b',        
+        r'\b\d{3}[-\s]?\d{7,8}\b',         
     ]
     matches = []
     for pattern in patterns:
@@ -575,6 +555,7 @@ def extract_money(text):
             continue
 
     return filtered_matches
+
 def extract_gender(text):
     return re.findall(r'\b(LELAKI|PEREMPUAN|MALE|FEMALE)\b', text, re.I)
 
@@ -582,11 +563,11 @@ def extract_nationality(text):
     return re.findall(r'\b(WARGANEGARA|WARGA ASING|CITIZEN|NON-CITIZEN)\b', text, re.I)
 
 def extract_passport(text):
-    # 匹配护照号码格式：1个字母+7个数字，或类似格式
+    # Match passport number format: 1 letter + 7 numbers, or similar format
     patterns = [
-        r'\b[A-Z]\d{7,8}\b',      # H12345678 或 H1234567
-        r'\b[A-Z]{1,2}\d{6,7}\b', # HK1234567 或 A1234567
-        r'\b\d{8,9}[A-Z]\b'       # 12345678A (反向格式)
+        r'\b[A-Z]\d{7,8}\b',      # H12345678 or H1234567
+        r'\b[A-Z]{1,2}\d{6,7}\b', # HK1234567 or A1234567
+        r'\b\d{8,9}[A-Z]\b'       # 12345678A
     ]
     
     matches = []
@@ -596,7 +577,7 @@ def extract_passport(text):
     return matches
 
 def extract_credit_card(text):
-    """提取信用卡号码"""
+    """Extract credit card numbers"""
     patterns = [
         r"\b4\d{3}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b",      # Visa
         r"\b5[1-5]\d{2}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", # Mastercard
@@ -613,11 +594,11 @@ def extract_credit_card(text):
     return matches
 
 def extract_malaysian_address(text):
-    """提取马来西亚地址"""
+    """Extract Malaysia Address"""
     patterns = [
-        r"\b\d+[A-Za-z]?,?\s+[A-Za-z\s]+,\s*\d{5}\s+[A-Za-z\s]+\b",  # 标准地址
-        r"\b[A-Za-z\s]+,\s*\d{5}\s+[A-Za-z\s]+,\s*[A-Za-z\s]+\b",    # 无门牌号
-        r"\bNo\.?\s*\d+[A-Za-z]?,?\s+[A-Za-z\s]+,\s*\d{5}\b",        # No. 开头
+        r"\b\d+[A-Za-z]?,?\s+[A-Za-z\s]+,\s*\d{5}\s+[A-Za-z\s]+\b",
+        r"\b[A-Za-z\s]+,\s*\d{5}\s+[A-Za-z\s]+,\s*[A-Za-z\s]+\b",
+        r"\bNo\.?\s*\d+[A-Za-z]?,?\s+[A-Za-z\s]+,\s*\d{5}\b",   
     ]
     matches = []
     for pattern in patterns:
@@ -625,10 +606,10 @@ def extract_malaysian_address(text):
     return matches
 
 def extract_vehicle_registration(text):
-    """提取车牌号码"""
+    """Extract license plate number"""
     patterns = [
-        r"\b[A-Z]{1,3}\s?\d{1,4}\s?[A-Z]?\b",  # 马来西亚车牌
-        r"\b[A-Z]{2}\d{4}[A-Z]\b",             # 新格式
+        r"\b[A-Z]{1,3}\s?\d{1,4}\s?[A-Z]?\b",
+        r"\b[A-Z]{2}\d{4}[A-Z]\b",            
     ]
     matches = []
     for pattern in patterns:
@@ -638,13 +619,13 @@ def extract_vehicle_registration(text):
                 matches.append(match)
     return matches
 
-# === 验证函数 ===
+# === Validation Function ===
 def validate_malaysian_ic(ic_number: str) -> bool:
     if len(ic_number) != 12 or not ic_number.isdigit():
         return False
 
     try:
-        # 验证出生日期是否合法
+        # Verify that the date of birth is legitimate
         year = int(ic_number[:2])
         month = int(ic_number[2:4])
         day = int(ic_number[4:6])
@@ -652,11 +633,10 @@ def validate_malaysian_ic(ic_number: str) -> bool:
         datetime(full_year, month, day)
     except ValueError:
         return False
-
     return True
 
 def validate_credit_card(cc_number):
-    """使用Luhn算法验证信用卡号码"""
+    """Validating credit card numbers using the Luhn algorithm"""
     def luhn_checksum(card_num):
         def digits_of(n):
             return [int(d) for d in str(n)]
@@ -667,22 +647,21 @@ def validate_credit_card(cc_number):
         for d in even_digits:
             checksum += sum(digits_of(d*2))
         return checksum % 10
-
     return luhn_checksum(cc_number) == 0
 
 def validate_phone_number(phone):
-    """验证电话号码格式"""
+    """Validate phone number format"""
     clean_phone = re.sub(r'[\s+\-]', '', phone)
 
-    # 马来西亚手机号码验证
+    # Malaysia Mobile Number Verification
     if clean_phone.startswith('60'):
         clean_phone = clean_phone[2:]
 
-    # 手机号码格式
+    # mobile patterns
     mobile_patterns = [
-        r'^01[0-9]\d{7,8}$',  # 手机
-        r'^03\d{8}$',         # 固话KL
-        r'^0[4-9]\d{7,8}$',   # 其他州固话
+        r'^01[0-9]\d{7,8}$',
+        r'^03\d{8}$',      
+        r'^0[4-9]\d{7,8}$',
     ]
 
     for pattern in mobile_patterns:
@@ -692,13 +671,13 @@ def validate_phone_number(phone):
     return False
 
 def validate_vehicle_plate(plate):
-    """验证车牌号码格式"""
+    """Verify license plate number format"""
     clean_plate = re.sub(r'\s', '', plate.upper())
 
-    # 马来西亚车牌格式
+    # Malaysian license plate format
     patterns = [
-        r'^[A-Z]{1,3}\d{1,4}[A-Z]?$',  # 标准格式
-        r'^[A-Z]{2}\d{4}[A-Z]$',       # 新格式
+        r'^[A-Z]{1,3}\d{1,4}[A-Z]?$',\
+        r'^[A-Z]{2}\d{4}[A-Z]$',       
     ]
 
     for pattern in patterns:
@@ -708,11 +687,11 @@ def validate_vehicle_plate(plate):
     return False
 
 def is_phone_number(number_str):
-    """检查数字字符串是否可能是电话号码"""
+    """Check if a numeric string is possibly a phone number"""
     clean_num = re.sub(r'[\s-]', '', number_str)
     return len(clean_num) in [10, 11, 12] and (clean_num.startswith('01') or clean_num.startswith('03'))
 
-# === 马来西亚地点白名单（防止误合并）===
+# === Malaysia location whitelist (to prevent accidental merging) ===
 MALAYSIA_LOCATIONS = {
     "KUALA LUMPUR", "PETALING JAYA", "SELANGOR", "JOHOR", "JOHOR BAHRU",
     "PENANG", "GEORGETOWN", "ALOR SETAR", "KELANTAN", "TERENGGANU",
@@ -721,85 +700,85 @@ MALAYSIA_LOCATIONS = {
 
 def extract_from_dictionaries(text, enabled_categories=None):
     """
-    从字典中提取PII，支持选择性类别过滤
+    Extracts PII from a dictionary, supporting selective category filtering
 
     Args:
-        text: 要分析的文本
-        enabled_categories: 启用的选择性PII类别列表
+        text: The text to be analyzed
+        enabled_categories: A list of enabled selective PII categories
 
     Returns:
-        list: [(label, value), ...] 格式的结果
+        list: [(label, value), ...] 
     """
     if enabled_categories is None:
         enabled_categories = list(SELECTABLE_PII_CATEGORIES.keys())
 
     print(f"[DEBUG] 字典提取，启用类别: {enabled_categories}")
-    print("[DEBUG] 原始文本：", text[:200])  # 只显示前200字符
+    print("[DEBUG] 原始文本：", text)
 
     results = []
     text_lower = text.lower()
 
-    # 1. 完整名称匹配（优先级最高）
+    # 1. Full name matching (highest priority)
     if "NAMES" in enabled_categories:
         for name in NAMES:
             if name.lower() in text_lower:
-                # 确保是完整单词匹配，不是部分匹配
+                # Make sure it matches the entire word, not a partial one
                 pattern = r'\b' + re.escape(name.lower()) + r'\b'
                 if re.search(pattern, text_lower):
                     results.append(("NAMES", name))
-                    print(f"[DEBUG] 找到完整姓名: {name}")
+                    print(f"[DEBUG] Find full name: {name}")
 
-    # 2. 完整组织名称匹配
+    # 2. Full organization name matching
     if "ORG_NAMES" in enabled_categories:
         for org in ORG_NAMES:
             if org.lower() in text_lower:
                 pattern = r'\b' + re.escape(org.lower()) + r'\b'
                 if re.search(pattern, text_lower):
                     results.append(("ORG_NAMES", org))
-                    print(f"[DEBUG] 找到组织名称: {org}")
+                    print(f"[DEBUG] Find the organization name: {org}")
 
-    # 3. 种族匹配
+    # 3. Race Matching
     if "RACES" in enabled_categories:
         for race in RACES:
             if race.lower() in text_lower:
                 pattern = r'\b' + re.escape(race.lower()) + r'\b'
                 if re.search(pattern, text_lower):
                     results.append(("RACES", race))
-                    print(f"[DEBUG] 找到种族: {race}")
+                    print(f"[DEBUG] Find the race: {race}")
 
-    # 4. 状态匹配
+    # 4. State Matching
     if "STATUS" in enabled_categories:
         for status in STATUS:
             if status.lower() in text_lower:
                 pattern = r'\b' + re.escape(status.lower()) + r'\b'
                 if re.search(pattern, text_lower):
                     results.append(("STATUS", status))
-                    print(f"[DEBUG] 找到状态: {status}")
+                    print(f"[DEBUG] Found status: {status}")
 
-    # 5. 地点匹配
+    # 5. Location Matching
     if "LOCATIONS" in enabled_categories:
         for location in LOCATIONS:
             if location.lower() in text_lower:
-                # 地点可能包含特殊字符，使用更宽松的匹配
+                # Locations may contain special characters, use a looser match
                 if location.lower() in text_lower:
                     results.append(("LOCATIONS", location))
-                    print(f"[DEBUG] 找到地点: {location}")
+                    print(f"[DEBUG] Find the location: {location}")
 
-    # 6. 宗教匹配
+    # 6. Religious Match
     if "RELIGIONS" in enabled_categories:
         for religion in RELIGIONS:
             if religion.lower() in text_lower:
                 pattern = r'\b' + re.escape(religion.lower()) + r'\b'
                 if re.search(pattern, text_lower):
                     results.append(("RELIGIONS", religion))
-                    print(f"[DEBUG] 找到宗教: {religion}")
+                    print(f"[DEBUG] Find religion: {religion}")
 
-    print(f"[DEBUG] 字典匹配结果: 找到 {len(results)} 个PII项")
+    print(f"[DEBUG] Dictionary matching results: Found {len(results)} PII items")
     for label, value in results:
         print(f"[DEBUG]   - {label}: {value}")
     return results
 
-# ✅ 选择性PII类别定义
+# ✅ Optional PII Category Definitions
 SELECTABLE_PII_CATEGORIES = {
     "NAMES": "Personal names and identities",
     "RACES": "Ethnic and racial information",
@@ -809,7 +788,7 @@ SELECTABLE_PII_CATEGORIES = {
     "RELIGIONS": "Religious affiliations"
 }
 
-# ✅ 非选择性PII类别（始终遮罩）
+# ✅ Non-selective PII categories (always masked)
 NON_SELECTABLE_PII_CATEGORIES = {
     "IC": "Malaysian IC numbers",
     "Email": "Email addresses",
@@ -823,20 +802,20 @@ NON_SELECTABLE_PII_CATEGORIES = {
     "Vehicle Registration": "Vehicle registration numbers"
 }
 
-# ✅ 主函数：提取所有 PII（带选择性过滤 + ChatGPT增强）
+# ✅ Main function: Extract all PII (with selective filtering + ChatGPT enhancement)
 def extract_all_pii(text, enabled_categories=None):
     """
-    提取PII，支持选择性类别过滤，集成ChatGPT增强检测
+    Extract PII, support selective category filtering, and integrate ChatGPT enhanced detection
 
     Args:
-        text: 要分析的文本
-        enabled_categories: 启用的选择性PII类别列表，如 ["NAMES", "RACES"]
-                          如果为None，则启用所有类别
+        text: Text to analyze
+        enabled_categories: A list of selective PII categories to enable, such as ["NAMES", "RACES"]
+                If None, all categories are enabled.
 
     Returns:
         list: PII实体列表 [(label, value), ...]
     """
-    # 如果未指定，默认启用所有选择性类别
+    # If not specified, all optional categories are enabled by default.
     if enabled_categories is None:
         enabled_categories = list(SELECTABLE_PII_CATEGORIES.keys())
 
@@ -851,7 +830,7 @@ def extract_all_pii(text, enabled_categories=None):
     ner_results = []
     chatgpt_results = []
 
-    # --- 1. NER 提取（细粒度）with token limit handling ---
+    # --- 1. NER extraction (fine-grained) with token limit handling ---
     try:
         # Load model if not already loaded
         if not model_loaded:
@@ -894,7 +873,7 @@ def extract_all_pii(text, enabled_categories=None):
         for ent in ner_raw_results:
             word = ent["word"]
             entity = ent["entity"].replace("B-", "").replace("I-", "")
-            # 判断是否是新词开始
+            # Determine whether it is the beginning of a new word
             is_new_word = word.startswith("▁") or (not word.startswith("##") and not word.startswith("▁"))
             clean_word = word.replace("##", "").replace("▁", "")
             tokens.append({
@@ -907,33 +886,33 @@ def extract_all_pii(text, enabled_categories=None):
         current_label = ""
 
         for tok in tokens:
-            # 如果是新词，结束当前词
+            # If it is a new word, end the current word
             if current_label and tok["is_new_word"]:
                 if current_word:
                     ner_results.append((current_label, current_word))
                 current_word = tok["word"]
                 current_label = tok["entity"]
-            # 如果是延续（## 或 ▁ 开头），且实体类型相同，则拼接
+            # If it is a continuation (starting with ## or ), and the entity types are the same, then concatenate
             elif current_label == tok["entity"]:
                 current_word += tok["word"]
-            # 不同类型，先结束旧的，再开新的
+            # Different types, end the old one first, then start the new one
             else:
                 if current_word:
                     ner_results.append((current_label, current_word))
                 current_word = tok["word"]
                 current_label = tok["entity"]
 
-        # 结束最后一个
+        # End the last one
         if current_word:
             ner_results.append((current_label, current_word))
 
         print(f"[NER] Found {len(ner_results)} entities")
 
     except Exception as e:
-        print(f"[WARN] NER 提取失败: {e}")
+        print(f"[WARN] NER extraction failed: {e}")
         print("[INFO] Continuing with regex and ChatGPT detection methods")
 
-    # --- 2. 增强的正则规则补充 ---
+    # --- 2. Enhanced regular rule supplement ---
     extractors = {
         "IC": extract_ic,
         "Email": extract_email,
@@ -949,21 +928,21 @@ def extract_all_pii(text, enabled_categories=None):
         "Vehicle Registration": extract_vehicle_registration,
     }
 
-    print(f"[INFO] 开始正则提取，共 {len(extractors)} 种PII类型")
+    print(f"[INFO] Start regular extraction, total {len(extractors)} PII types")
 
     for label, func in extractors.items():
         matches = func(text)
         for match in matches:
             presidio_regex_results.append((label, match.strip()))
 
-    # --- 3. 字典匹配补充（选择性过滤）---
+    # --- 3. Dictionary matching supplement (selective filtering) ---
     dict_results = extract_from_dictionaries(text, enabled_categories)
     for label, value in dict_results:
         presidio_regex_results.append((label, value))
 
     print(f"[PRESIDIO/REGEX] Found {len(presidio_regex_results)} entities")
 
-    # --- 4. ChatGPT 增强检测 ---
+    # --- 4. ChatGPT Enhanced Detection ---
     if chatgpt_enabled and len(text.strip()) >= 20:  # Use ChatGPT for meaningful text
         print("[INFO] Starting ChatGPT enhanced detection...")
         chatgpt_results = extract_pii_with_chatgpt(text, enabled_categories)
@@ -974,23 +953,23 @@ def extract_all_pii(text, enabled_categories=None):
         else:
             print(f"[INFO] ChatGPT detection skipped (text too short: {len(text.strip())} chars < 20)")
 
-    # --- 5. 结果合并与共识机制 (Stage 1 Complete) ---
-    print("[INFO] Stage 1: 应用共识机制合并检测结果...")
+    # --- 5. Result merging and consensus mechanism (Stage 1 Complete) ---
+    print("[INFO] Stage 1: Apply consensus mechanism to merge test results...")
     stage1_results = combine_pii_results(presidio_regex_results, ner_results, chatgpt_results)
 
-    # --- 6. 去重 + 过滤非敏感词 (Stage 1 Filtering) ---
+    # --- 6. Deduplication + Filtering Non-sensitive Words (Stage 1 Filtering) ---
     seen = set()
     stage1_filtered = []
     for label, value in stage1_results:
         clean_val = value.strip().lower()
-        # 跳过空值和忽略词
+        # Skipping empty values and ignoring words
         if not clean_val or clean_val in IGNORE_WORDS:
             continue
         if clean_val not in seen:
             seen.add(clean_val)
-            stage1_filtered.append((label, value.strip()))  # 保留原始大小写
+            stage1_filtered.append((label, value.strip()))  # Keep original case
 
-    print(f"[STAGE-1] 初步检测到 {len(stage1_filtered)} 个PII候选项")
+    print(f"[STAGE-1] Initially detected {len(stage1_filtered)} PII candidates")
 
     # --- 7. Stage 2: ChatGPT Contextual Validation (ADDITIVE, not filtering) ---
     if len(stage1_filtered) > 0 and len(text.strip()) >= 100:  # Only for substantial documents

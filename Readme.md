@@ -71,8 +71,25 @@ Our solution — Project Protector — is an AI-powered PII processing pipeline 
 | **Logging/UI**       | `rich`, `colorama`                                                  | Colored logging and CLI visuals                      |
 | **Utilities**        | `python-multipart`, `requests`, `httpx`, `click`                    | Web and CLI helpers                                  |
 
+## How to Install:
+
+### Requirement 
+Pyhton 3.11.6
+
+poppler-24.08.0 and change decrypt_pdf.py poppler_path into your poppler path just install
+
+<pre>
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+</pre>
+
+
 ## Presentation Deck:
 
 [Project Protector Presentation Deck](https://www.canva.com/design/DAGub40Ie78/bGUAwjYC5osyRcr6vmW8Og/edit?utm_content=DAGub40Ie78&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
 
 [Project Protector Video](https://www.youtube.com/watch?v=YYZ-JlLf9U4)
+
+[User Munual](https://www.canva.com/design/DAGwCao0VeY/57P8u3J6Q6zVJcSqZAS9aw/edit?utm_content=DAGwCao0VeY&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
