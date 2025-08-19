@@ -90,6 +90,4 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 [Project Protector Presentation Deck](https://www.canva.com/design/DAGub40Ie78/bGUAwjYC5osyRcr6vmW8Og/edit?utm_content=DAGub40Ie78&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
 
-[Project Protector Video](https://www.youtube.com/watch?v=YYZ-JlLf9U4)
-
 [User Munual](https://www.canva.com/design/DAGwCao0VeY/57P8u3J6Q6zVJcSqZAS9aw/edit?utm_content=DAGwCao0VeY&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
