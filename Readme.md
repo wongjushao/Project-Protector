@@ -66,7 +66,7 @@ Our solution — Project Protector — is an AI-powered PII processing pipeline 
 | **Computer Vision**  | `opencv`, `imutils`, `deskew`                                       | Image preprocessing, alignment                       |
 | **Data Handling**    | `pandas`, `numpy`, `scikit-image`                                   | Tabular & image data handling                        |
 | **Security**         | `cryptography`, `pycryptodome`                                      | Data encryption / decryption                         |
-| **Document Parsing** | `docx2txt`, `python-docx`, `python-pptx`, `extract-msg`, `textract` | MS Office and email file parsing                     |
+| **Document Parsing** | `docx2txt`, `python-docx`, `python-pptx`							 | MS Office and email file parsing                     |
 | **Deep Learning**    | `tensorflow`, `torch`, `keras`                                      | Model training/inference (NER / OCR post-processing) |
 | **Logging/UI**       | `rich`, `colorama`                                                  | Colored logging and CLI visuals                      |
 | **Utilities**        | `python-multipart`, `requests`, `httpx`, `click`                    | Web and CLI helpers                                  |
