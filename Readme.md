@@ -81,6 +81,7 @@ poppler-24.08.0 and change decrypt_pdf.py poppler_path into your poppler path ju
 <pre>
 python -m venv venv
 .\venv\Scripts\activate
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 </pre>

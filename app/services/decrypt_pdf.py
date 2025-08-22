@@ -53,7 +53,7 @@ def decrypt_masked_pdf(masked_pdf_path: str, json_path: str, key_path: str):
     # Step 3: PDF → Images
     try:
         # Use the same poppler path as in ocr_pdf.py
-        poppler_path = os.path.abspath("C:\\Project Protector\\env\\Lib\\poppler-24.08.0\\Library\\bin")
+        poppler_path = os.path.abspath("C:\\copy\\venv\\Lib\\poppler-24.08.0\\Library\\bin")
         pages = convert_from_path(masked_pdf_path, dpi=150, poppler_path=poppler_path)
         print(f"[INFO] PDF converted to {len(pages)} page images")
     except Exception as e:

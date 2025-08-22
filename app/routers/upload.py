@@ -5,6 +5,7 @@ from app.services.audit_service import AuditService
 
 router = APIRouter()
 UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_MIME_TYPES = {
     "application/pdf": "pdf",
