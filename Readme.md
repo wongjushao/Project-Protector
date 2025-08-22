@@ -77,6 +77,7 @@ Our solution — Project Protector — is an AI-powered PII processing pipeline 
 Pyhton 3.11.6
 
 poppler-24.08.0 and change decrypt_pdf.py poppler_path into your poppler path just install
+https://github.com/oschwartz10612/poppler-windows/releases/tag/v24.08.0-0
 
 <pre>
 python -m venv venv
