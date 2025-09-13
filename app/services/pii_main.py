@@ -37,38 +37,30 @@ def load_model():
             # Fallback to regex-only detection
             model_loaded = False
 
-# === ChatGPT API Integration ===
-chatgpt_enabled = False
-chatgpt_client = None
+# === Gemini API Integration ===
+gemini_enabled = False
+gemini_client = None
 
-def load_chatgpt_client():
-    """Initialize ChatGPT client if API key is available"""
-    global chatgpt_client, chatgpt_enabled
+def load_gemini_client():
+    """Initialize Gemini client if API key is available"""
+    global gemini_client, gemini_enabled
+    try:
+        from app.config.gemini_adapter import GeminiClient
+    except Exception as e:
+        print(f"[WARN] Gemini adapter not available: {e}")
+        print("[INFO] Gemini PII detection disabled - using Presidio + NER only")
+        gemini_enabled = False
+        return False
 
     try:
-        # Try to get API key from environment variable
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            print("[INFO] OPENAI_API_KEY not found in environment variables")
-            print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
-            return False
-
-        # Try to import OpenAI
-        try:
-            from openai import OpenAI
-        except ImportError:
-            print("[WARN] OpenAI library not installed. Install with: pip install openai")
-            print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
-            return False
-        # Initialize client
-        chatgpt_client = OpenAI(api_key=api_key)
-        chatgpt_enabled = True
-        print("✅ ChatGPT API client initialized successfully")
+        gemini_client = GeminiClient()
+        gemini_enabled = True
+        print("✅ Gemini API client initialized successfully")
         return True
     except Exception as e:
-        print(f"[WARN] Failed to initialize ChatGPT client: {e}")
-        print("[INFO] ChatGPT PII detection disabled - using Presidio + NER only")
-        chatgpt_enabled = False
+        print(f"[WARN] Failed to initialize Gemini client: {e}")
+        print("[INFO] Gemini PII detection disabled - using Presidio + NER only")
+        gemini_enabled = False
         return False
 
 def chunk_text_intelligently(text: str, max_chunk_size: int = 3000) -> List[str]:
@@ -117,9 +109,9 @@ def chunk_text_intelligently(text: str, max_chunk_size: int = 3000) -> List[str]
 
     return chunks
 
-def extract_pii_with_chatgpt(text: str, enabled_categories: Optional[List[str]] = None) -> List[Tuple[str, str]]:
+def extract_pii_with_gemini(text: str, enabled_categories: Optional[List[str]] = None) -> List[Tuple[str, str]]:
     """
-    Use ChatGPT to identify PII in text with focus on Malaysian context and intelligent chunking
+    Use Gemini to identify PII in text with focus on Malaysian context and intelligent chunking
 
     Args:
         text: Text to analyze
@@ -128,7 +120,7 @@ def extract_pii_with_chatgpt(text: str, enabled_categories: Optional[List[str]] 
     Returns:
         List of (label, value) tuples
     """
-    if not chatgpt_enabled or not chatgpt_client:
+    if not gemini_enabled or not gemini_client:
         return []
 
     if not text or len(text.strip()) < 20:  # Minimum meaningful text length
@@ -138,11 +130,11 @@ def extract_pii_with_chatgpt(text: str, enabled_categories: Optional[List[str]] 
     if enabled_categories is None:
         enabled_categories = list(SELECTABLE_PII_CATEGORIES.keys())
 
-    # Chunk text if it's too long for ChatGPT
+    # Chunk text if it's too long for the LLM
     text_chunks = chunk_text_intelligently(text, max_chunk_size=3000)
     all_results = []
 
-    print(f"[ChatGPT] Processing {len(text_chunks)} text chunks")
+    print(f"[Gemini] Processing {len(text_chunks)} text chunks")
 
     for chunk_idx, chunk in enumerate(text_chunks):
         try:
@@ -201,19 +193,9 @@ Return ONLY a JSON array with this exact format:
 Text to analyze (chunk {chunk_idx + 1}/{len(text_chunks)}):
 {chunk}"""
 
-            # Call ChatGPT API
-            response = chatgpt_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a PII detection expert. Return only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=1000,
-                temperature=0.1  # Low temperature for consistent results
-            )
-
-            # Parse response
-            response_text = response.choices[0].message.content.strip()
+            # Call Gemini API via adapter
+            system_prompt = "You are a PII detection expert. Return only valid JSON."
+            response_text = gemini_client.generate_json(system_prompt, prompt)
 
             # Extract JSON from response (handle cases where GPT adds extra text)
             json_start = response_text.find('[')
@@ -236,23 +218,23 @@ Text to analyze (chunk {chunk_idx + 1}/{len(text_chunks)}):
                             chunk_results.append((category, value))
 
                 all_results.extend(chunk_results)
-                print(f"[ChatGPT] Chunk {chunk_idx + 1}: Found {len(chunk_results)} PII items")
+                print(f"[Gemini] Chunk {chunk_idx + 1}: Found {len(chunk_results)} PII items")
             else:
-                print(f"[WARN] ChatGPT chunk {chunk_idx + 1}: No valid JSON in response")
+                print(f"[WARN] Gemini chunk {chunk_idx + 1}: No valid JSON in response")
 
         except json.JSONDecodeError as e:
-            print(f"[WARN] ChatGPT chunk {chunk_idx + 1}: JSON parsing failed: {e}")
+            print(f"[WARN] Gemini chunk {chunk_idx + 1}: JSON parsing failed: {e}")
             continue
         except Exception as e:
-            print(f"[WARN] ChatGPT chunk {chunk_idx + 1}: Processing failed: {e}")
+            print(f"[WARN] Gemini chunk {chunk_idx + 1}: Processing failed: {e}")
             continue
 
-    print(f"[ChatGPT] Total found across all chunks: {len(all_results)} PII items")
+    print(f"[Gemini] Total found across all chunks: {len(all_results)} PII items")
     return all_results
 
-def validate_pii_with_chatgpt_context(text: str, candidate_pii: List[Tuple[str, str]], enabled_categories: Optional[List[str]] = None) -> List[Tuple[str, str]]:
+def validate_pii_with_gemini_context(text: str, candidate_pii: List[Tuple[str, str]], enabled_categories: Optional[List[str]] = None) -> List[Tuple[str, str]]:
     """
-    Stage 2: Use ChatGPT to validate and filter PII candidates based on context
+    Stage 2: Use Gemini to validate and filter PII candidates based on context
 
     Args:
         text: Original full text for context
@@ -262,8 +244,8 @@ def validate_pii_with_chatgpt_context(text: str, candidate_pii: List[Tuple[str, 
     Returns:
         Filtered list of (label, value) tuples that are truly PII
     """
-    if not chatgpt_enabled or not chatgpt_client:
-        print("[INFO] ChatGPT contextual validation skipped (not enabled)")
+    if not gemini_enabled or not gemini_client:
+        print("[INFO] Gemini contextual validation skipped (not enabled)")
         return candidate_pii
 
     if not candidate_pii:
@@ -274,10 +256,10 @@ def validate_pii_with_chatgpt_context(text: str, candidate_pii: List[Tuple[str, 
         print("[INFO] Text too short for contextual validation")
         return candidate_pii
 
-    print(f"[ChatGPT-VALIDATION] Starting contextual validation of {len(candidate_pii)} candidates")
+    print(f"[Gemini-VALIDATION] Starting contextual validation of {len(candidate_pii)} candidates")
 
     try:
-        # Prepare candidate list for ChatGPT analysis
+    # Prepare candidate list for Gemini analysis
         candidates_text = "\n".join([f"- {label}: '{value}'" for label, value in candidate_pii])
 
         # Create context-aware validation prompt
@@ -328,17 +310,11 @@ Return ONLY a JSON array of items that should be KEPT (truly sensitive PII):
 
 Focus on protecting individual privacy while removing corporate/institutional information."""
 
-        # Call ChatGPT for validation
-        response = chatgpt_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a PII validation expert. Return only valid JSON with items that truly need privacy protection."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=1500,
-            temperature=0.1
+        # Call Gemini for validation
+        system_prompt = (
+            "You are a PII validation expert. Return only valid JSON with items that truly need privacy protection."
         )
-        response_text = response.choices[0].message.content.strip()
+        response_text = gemini_client.generate_json(system_prompt, prompt)
         # Extract JSON from response
         json_start = response_text.find('[')
         json_end = response_text.rfind(']') + 1
@@ -351,10 +327,10 @@ Focus on protecting individual privacy while removing corporate/institutional in
                 if isinstance(item, dict) and 'label' in item and 'value' in item:
                     label = item['label']
                     value = item['value'].strip()
-                    reason = item.get('reason', 'Validated by ChatGPT')
+                    reason = item.get('reason', 'Validated by Gemini')
                     if value:
                         validated_results.append((label, value))
-                        print(f"[ChatGPT-VALIDATION] KEEP: {label} = '{value}' ({reason})")
+                        print(f"[Gemini-VALIDATION] KEEP: {label} = '{value}' ({reason})")
 
             # Show what was filtered out
             original_values = {value.lower() for _, value in candidate_pii}
@@ -362,34 +338,34 @@ Focus on protecting individual privacy while removing corporate/institutional in
             filtered_out = original_values - validated_values
 
             if filtered_out:
-                print(f"[ChatGPT-VALIDATION] FILTERED OUT: {len(filtered_out)} items")
+                print(f"[Gemini-VALIDATION] FILTERED OUT: {len(filtered_out)} items")
                 for value in list(filtered_out)[:5]:  # Show first 5
-                    print(f"[ChatGPT-VALIDATION] REMOVED: '{value}' (document artifact)")
+                    print(f"[Gemini-VALIDATION] REMOVED: '{value}' (document artifact)")
                 if len(filtered_out) > 5:
-                    print(f"[ChatGPT-VALIDATION] ... and {len(filtered_out) - 5} more")
+                    print(f"[Gemini-VALIDATION] ... and {len(filtered_out) - 5} more")
 
-            print(f"[ChatGPT-VALIDATION] Final result: {len(validated_results)}/{len(candidate_pii)} candidates validated as true PII")
+            print(f"[Gemini-VALIDATION] Final result: {len(validated_results)}/{len(candidate_pii)} candidates validated as true PII")
             return validated_results
         else:
-            print("[WARN] ChatGPT validation: No valid JSON in response")
+            print("[WARN] Gemini validation: No valid JSON in response")
             return candidate_pii
 
     except json.JSONDecodeError as e:
-        print(f"[WARN] ChatGPT validation JSON parsing failed: {e}")
+        print(f"[WARN] Gemini validation JSON parsing failed: {e}")
         return candidate_pii
     except Exception as e:
-        print(f"[WARN] ChatGPT validation failed: {e}")
+        print(f"[WARN] Gemini validation failed: {e}")
         return candidate_pii
 
 def combine_pii_results(presidio_results: List[Tuple[str, str]],
                        ner_results: List[Tuple[str, str]],
-                       chatgpt_results: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+                       gemini_results: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """
     Combine results from multiple PII detection methods using enhanced consensus mechanism
     Args:
         presidio_results: Results from Presidio/regex detection
         ner_results: Results from NER model (may be empty if failed)
-        chatgpt_results: Results from ChatGPT
+    gemini_results: Results from Gemini
     Returns:
         Combined and deduplicated results
     """
@@ -399,11 +375,11 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
         methods_used.append("Presidio/Regex")
     if ner_results:
         methods_used.append("NER")
-    if chatgpt_results:
-        methods_used.append("ChatGPT")
+    if gemini_results:
+        methods_used.append("Gemini")
     print(f"[CONSENSUS] Active detection methods: {', '.join(methods_used)}")
     # Combine all results
-    all_results = presidio_results + ner_results + chatgpt_results
+    all_results = presidio_results + ner_results + gemini_results
     if not all_results:
         print("[CONSENSUS] No PII detected by any method")
         return []
@@ -423,7 +399,7 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
             final_results.append((label, value))
         else:
             # Multiple detections - use consensus with priority
-            # Priority: ChatGPT > Presidio/Regex > NER for conflicting labels
+            # Priority: Gemini > Presidio/Regex > NER for conflicting labels
             label_votes = {}
             label_sources = {}
             for label, value in candidates:
@@ -432,8 +408,8 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
                     label_sources[label] = []
                 label_votes[label] += 1
                 # Determine source method (approximate)
-                if (label, value) in chatgpt_results:
-                    label_sources[label].append("ChatGPT")
+                if (label, value) in gemini_results:
+                    label_sources[label].append("Gemini")
                 elif (label, value) in presidio_results:
                     label_sources[label].append("Presidio")
                 else:
@@ -444,8 +420,8 @@ def combine_pii_results(presidio_results: List[Tuple[str, str]],
             for label, votes in label_votes.items():
                 score = votes
                 # Boost score based on source reliability
-                if "ChatGPT" in label_sources[label]:
-                    score += 2  # ChatGPT gets priority for context awareness
+                if "Gemini" in label_sources[label]:
+                    score += 2  # Gemini gets priority for context awareness
                 if "Presidio" in label_sources[label]:
                     score += 1  # Regex patterns are reliable
                 if score > best_score:
@@ -802,10 +778,10 @@ NON_SELECTABLE_PII_CATEGORIES = {
     "Vehicle Registration": "Vehicle registration numbers"
 }
 
-# ✅ Main function: Extract all PII (with selective filtering + ChatGPT enhancement)
+# ✅ Main function: Extract all PII (with selective filtering + Gemini enhancement)
 def extract_all_pii(text, enabled_categories=None):
     """
-    Extract PII, support selective category filtering, and integrate ChatGPT enhanced detection
+    Extract PII, support selective category filtering, and integrate Gemini enhanced detection
 
     Args:
         text: Text to analyze
@@ -819,16 +795,16 @@ def extract_all_pii(text, enabled_categories=None):
     if enabled_categories is None:
         enabled_categories = list(SELECTABLE_PII_CATEGORIES.keys())
 
-    # Initialize ChatGPT client if not already done
-    if not chatgpt_enabled:
-        load_chatgpt_client()
+    # Initialize Gemini client if not already done
+    if not gemini_enabled:
+        load_gemini_client()
 
     print(f"[INFO] PII detection started - Enabled categories: {enabled_categories}")
-    print(f"[INFO] Detection methods: NER + Regex + Dictionary + {'ChatGPT' if chatgpt_enabled else 'No ChatGPT'}")
+    print(f"[INFO] Detection methods: NER + Regex + Dictionary + {'Gemini' if gemini_enabled else 'No Gemini'}")
 
     presidio_regex_results = []
     ner_results = []
-    chatgpt_results = []
+    gemini_results = []
 
     # --- 1. NER extraction (fine-grained) with token limit handling ---
     try:
@@ -910,7 +886,7 @@ def extract_all_pii(text, enabled_categories=None):
 
     except Exception as e:
         print(f"[WARN] NER extraction failed: {e}")
-        print("[INFO] Continuing with regex and ChatGPT detection methods")
+    print("[INFO] Continuing with regex and Gemini detection methods")
 
     # --- 2. Enhanced regular rule supplement ---
     extractors = {
@@ -942,20 +918,20 @@ def extract_all_pii(text, enabled_categories=None):
 
     print(f"[PRESIDIO/REGEX] Found {len(presidio_regex_results)} entities")
 
-    # --- 4. ChatGPT Enhanced Detection ---
-    if chatgpt_enabled and len(text.strip()) >= 20:  # Use ChatGPT for meaningful text
-        print("[INFO] Starting ChatGPT enhanced detection...")
-        chatgpt_results = extract_pii_with_chatgpt(text, enabled_categories)
-        print(f"[ChatGPT] Found {len(chatgpt_results)} entities")
+    # --- 4. Gemini Enhanced Detection ---
+    if gemini_enabled and len(text.strip()) >= 20:  # Use LLM for meaningful text
+        print("[INFO] Starting Gemini enhanced detection...")
+        gemini_results = extract_pii_with_gemini(text, enabled_categories)
+        print(f"[Gemini] Found {len(gemini_results)} entities")
     else:
-        if not chatgpt_enabled:
-            print("[INFO] ChatGPT detection skipped (not enabled)")
+        if not gemini_enabled:
+            print("[INFO] Gemini detection skipped (not enabled)")
         else:
-            print(f"[INFO] ChatGPT detection skipped (text too short: {len(text.strip())} chars < 20)")
+            print(f"[INFO] Gemini detection skipped (text too short: {len(text.strip())} chars < 20)")
 
     # --- 5. Result merging and consensus mechanism (Stage 1 Complete) ---
     print("[INFO] Stage 1: Apply consensus mechanism to merge test results...")
-    stage1_results = combine_pii_results(presidio_regex_results, ner_results, chatgpt_results)
+    stage1_results = combine_pii_results(presidio_regex_results, ner_results, gemini_results)
 
     # --- 6. Deduplication + Filtering Non-sensitive Words (Stage 1 Filtering) ---
     seen = set()
@@ -971,20 +947,20 @@ def extract_all_pii(text, enabled_categories=None):
 
     print(f"[STAGE-1] Initially detected {len(stage1_filtered)} PII candidates")
 
-    # --- 7. Stage 2: ChatGPT Contextual Validation (ADDITIVE, not filtering) ---
+    # --- 7. Stage 2: Gemini Contextual Validation (ADDITIVE, not filtering) ---
     if len(stage1_filtered) > 0 and len(text.strip()) >= 100:  # Only for substantial documents
-        print("[INFO] Stage 2: Starting ChatGPT contextual validation...")
-        chatgpt_validated = validate_pii_with_chatgpt_context(text, stage1_filtered, enabled_categories)
+        print("[INFO] Stage 2: Starting Gemini contextual validation...")
+        gemini_validated = validate_pii_with_gemini_context(text, stage1_filtered, enabled_categories)
 
         # Calculate filtering statistics for logging
-        filtered_count = len(stage1_filtered) - len(chatgpt_validated)
+        filtered_count = len(stage1_filtered) - len(gemini_validated)
         if filtered_count > 0:
-            print(f"[STAGE-2] ChatGPT validation: {len(chatgpt_validated)}/{len(stage1_filtered)} items passed validation")
+            print(f"[STAGE-2] Gemini validation: {len(gemini_validated)}/{len(stage1_filtered)} items passed validation")
         else:
-            print(f"[STAGE-2] ChatGPT validation: All candidates passed validation")
+            print(f"[STAGE-2] Gemini validation: All candidates passed validation")
 
-        # IMPORTANT: Use ALL Stage 1 results, not just ChatGPT-validated ones
-        # This ensures comprehensive PII protection while benefiting from ChatGPT's accuracy insights
+        # IMPORTANT: Use ALL Stage 1 results, not just Gemini-validated ones
+        # This ensures comprehensive PII protection while benefiting from Gemini's accuracy insights
         final_results = stage1_filtered
         print(f"[STAGE-2] Retaining all Stage 1 detection results to ensure comprehensive protection")
     else:

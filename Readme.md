@@ -6,7 +6,7 @@ In sensitive industries like finance, healthcare, and government, the need to ha
 
 ## 🧠 Explanation of the Solution
 
-Our solution — Project Protector — is an AI-powered PII processing pipeline that combines the robustness of Named Entity Recognition (NER), the adaptability of OpenAI’s ChatGPT, and the compliance-ready architecture of Microsoft Presidio. It supports both structured (CSV, TXT) and unstructured formats (PDF, images) through integrated OCR.
+Our solution — Project Protector — is an AI-powered PII processing pipeline that combines the robustness of Named Entity Recognition (NER), the adaptability of Google’s Gemini, and the compliance-ready architecture of Microsoft Presidio. It supports both structured (CSV, TXT) and unstructured formats (PDF, images) through integrated OCR.
 
 ### Key Components:
 1. Multi-Layered PII Detection:
@@ -15,7 +15,7 @@ Our solution — Project Protector — is an AI-powered PII processing pipeline 
 
 	- Domain Dictionary Filter for organization-specific terms (e.g., “Loan ID”, “Medical Record #”).
 
-	- ChatGPT API for fuzzy candidate mining and novel sensitive pattern discovery (e.g., obfuscated names, nicknames).
+	- Gemini API for fuzzy candidate mining and novel sensitive pattern discovery (e.g., obfuscated names, nicknames).
 
 2. Presidio Integration:
 
@@ -50,7 +50,7 @@ Our solution — Project Protector — is an AI-powered PII processing pipeline 
 
 - 🔄 Masked image restoration (optional)
 
-- 🧠 Auto-learning mechanism from ChatGPT feedback
+- 🧠 Auto-learning mechanism from LLM feedback (Gemini)
 
 ### 🛠️ Tech Stack Used
 
@@ -61,7 +61,7 @@ Our solution — Project Protector — is an AI-powered PII processing pipeline 
 | **Data Base**        | `SQLAlchemy`, `SQLite`                                              | Data storage and querying for audit logs     	    |
 | **OCR**              | `EasyOCR`, `pytesseract`, `pdf2image`                               | Optical Character Recognition from images/PDFs       |
 | **PII / NER**        | `spacy`, `presidio`, `transformers`                                 | Named Entity Recognition and PII detection           |
-| **LLM Integration**  | `openai`, `tiktoken`                                                | GPT model integration & token counting               |
+| **LLM Integration**  | `google-generativeai`                                               | Gemini model integration                             |
 | **NLP Support**      | `nltk`, `sentencepiece`, `regex`                                    | Language preprocessing and tokenization              |
 | **Computer Vision**  | `opencv`, `imutils`, `deskew`                                       | Image preprocessing, alignment                       |
 | **Data Handling**    | `pandas`, `numpy`, `scikit-image`                                   | Tabular & image data handling                        |
@@ -84,6 +84,20 @@ python -m venv venv
 .\venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+</pre>
+
+### Configure Gemini API key
+
+Set one of these environment variables before running the server:
+
+- GOOGLE_API_KEY (recommended)
+- GEMINI_API_KEY
+
+On Windows PowerShell:
+
+<pre>
+$env:GOOGLE_API_KEY = "your_api_key_here"
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 </pre>
 

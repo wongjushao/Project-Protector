@@ -128,11 +128,11 @@ async def process_task(task_id: str, request: Request):
                             "processing_successful": True
                         }
 
-                        # Add ChatGPT to detection methods if enabled
+                        # Add Gemini to detection methods if enabled
                         try:
-                            from app.services.pii_main import chatgpt_enabled
-                            if chatgpt_enabled:
-                                pii_found_data["detection_methods"].append("ChatGPT")
+                            from app.services.pii_main import gemini_enabled
+                            if gemini_enabled:
+                                pii_found_data["detection_methods"].append("Gemini")
                         except:
                             pass
 

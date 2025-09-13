@@ -177,7 +177,7 @@ def process_text_optimized(file_path: str, fernet: Fernet, key, enabled_pii_cate
     content = read_text_file(file_path)
 
     print("[INFO] Starting PII extraction...")
-    # Use enhanced extract_all_pii (includes NER + rules + dictionary + ChatGPT)
+    # Use enhanced extract_all_pii (includes NER + rules + dictionary + Gemini)
     all_pii_list = extract_all_pii(content, enabled_pii_categories)
 
     print(f"[INFO] Total found {len(all_pii_list)} PII items")

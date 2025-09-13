@@ -1,10 +1,10 @@
 """
-ChatGPT API Configuration for PII Detection Enhancement
+Gemini API Configuration for PII Detection Enhancement
 """
 
 import os
 
-# ChatGPT API Configuration
+# Gemini API Configuration
 CHATGPT_CONFIG = {
     # Model settings
     "model": "gpt-3.5-turbo",  # or "gpt-4" for better accuracy but higher cost
@@ -20,7 +20,7 @@ CHATGPT_CONFIG = {
     "retry_delay": 1.0,  # seconds
     
     # Text processing limits
-    "min_text_length": 20,  # Minimum text length to process with ChatGPT
+    "min_text_length": 20,  # Minimum text length to process with Gemini
     "max_text_length": 3000,  # Maximum text length per request
     
     # Confidence thresholds
@@ -28,7 +28,7 @@ CHATGPT_CONFIG = {
     "consensus_threshold": 0.6,  # Threshold for consensus mechanism
 }
 
-# PII Categories that ChatGPT should focus on
+# PII Categories that Gemini should focus on
 CHATGPT_PII_CATEGORIES = {
     "NAMES": {
         "description": "Personal names, especially Malaysian names with patterns like 'anak', 'bin', 'binti'",
@@ -79,7 +79,7 @@ def is_chatgpt_enabled():
     return api_key is not None and len(api_key.strip()) > 0
 
 def get_chatgpt_prompt_template():
-    """Get the prompt template for ChatGPT PII detection"""
+    """Get the prompt template for Gemini PII detection"""
     return """You are a PII (Personally Identifiable Information) detection expert specializing in Malaysian documents and cultural context.
 
 Analyze the following text and identify PII entities. Focus ONLY on these categories:
@@ -102,7 +102,7 @@ Text to analyze:
 {text}"""
 
 def get_model_config():
-    """Get model configuration for ChatGPT API calls"""
+    """Get model configuration for Gemini API calls"""
     return {
         "model": CHATGPT_CONFIG["model"],
         "max_tokens": CHATGPT_CONFIG["max_tokens"],
